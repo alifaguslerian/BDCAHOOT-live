@@ -1,1 +1,23 @@
 @import "tailwindcss";
+
+@theme {
+  --font-anybody: 'Anybody', sans-serif;
+  --font-space: 'Space Grotesk', sans-serif;
+}
+
+body {
+  font-family: var(--font-space), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.font-anybody {
+  font-family: var(--font-anybody), sans-serif;
+}
+
+.font-space {
+  font-family: var(--font-space), sans-serif;
+}
+
+/* Tabular numbers for live score and countdown animations */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
