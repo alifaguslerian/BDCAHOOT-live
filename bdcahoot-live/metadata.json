@@ -1,0 +1,6 @@
+{
+  "name": "BDCAHOOT Minigames",
+  "description": "Interactive multiplayer quiz arena with live host projector display, speed-bonus scoring, and real-time player controls.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
