@@ -1,0 +1,334 @@
+export interface Question {
+  id: number;
+  number: number;
+  totalQuestions: number;
+  category: string;
+  points: number;
+  question: string;
+  options: {
+    key: 'A' | 'B' | 'C' | 'D';
+    label: string;
+    text: string;
+    symbol: string;
+    color: string;
+    bgColor: string;
+    borderColor: string;
+    isCorrect: boolean;
+    voteCount: number;
+    votePercentage: number;
+  }[];
+}
+
+export interface Player {
+  id: string;
+  name: string;
+  avatarColor: string;
+  borderColor: string;
+  score: number;
+  rank: number;
+  rankDelta: number; // e.g. +2, 0, -1
+  rankDeltaText: string;
+  streak: number;
+  streakText: string;
+  tag?: string;
+  note?: string;
+  accuracy: string;
+  avgSpeed: string;
+}
+
+export const INITIAL_QUESTIONS: Question[] = [
+  {
+    id: 3,
+    number: 3,
+    totalQuestions: 30,
+    category: 'Frontend Tech',
+    points: 1000,
+    question: 'Manakah framework CSS yang mengutamakan pendekatan utility-first?',
+    options: [
+      {
+        key: 'A',
+        label: 'OPSI A',
+        text: 'Tailwind CSS',
+        symbol: '▲',
+        color: '#F04438',
+        bgColor: 'rgba(240, 68, 56, 0.15)',
+        borderColor: '#F04438',
+        isCorrect: true,
+        voteCount: 38,
+        votePercentage: 76,
+      },
+      {
+        key: 'B',
+        label: 'OPSI B',
+        text: 'Bootstrap',
+        symbol: '◆',
+        color: '#3B82F6',
+        bgColor: 'rgba(59, 130, 246, 0.15)',
+        borderColor: '#3B82F6',
+        isCorrect: false,
+        voteCount: 5,
+        votePercentage: 10,
+      },
+      {
+        key: 'C',
+        label: 'OPSI C',
+        text: 'Bulma CSS',
+        symbol: '●',
+        color: '#EAB308',
+        bgColor: 'rgba(234, 179, 8, 0.15)',
+        borderColor: '#EAB308',
+        isCorrect: false,
+        voteCount: 4,
+        votePercentage: 8,
+      },
+      {
+        key: 'D',
+        label: 'OPSI D',
+        text: 'Foundation',
+        symbol: '■',
+        color: '#22C55E',
+        bgColor: 'rgba(34, 197, 94, 0.15)',
+        borderColor: '#22C55E',
+        isCorrect: false,
+        voteCount: 3,
+        votePercentage: 6,
+      },
+    ],
+  },
+  {
+    id: 4,
+    number: 4,
+    totalQuestions: 30,
+    category: 'Web Architecture',
+    points: 1000,
+    question: 'Protokol komunikasi real-time full-duplex dua arah melalui satu koneksi TCP persisten adalah?',
+    options: [
+      {
+        key: 'A',
+        label: 'OPSI A',
+        text: 'WebSockets',
+        symbol: '▲',
+        color: '#F04438',
+        bgColor: 'rgba(240, 68, 56, 0.15)',
+        borderColor: '#F04438',
+        isCorrect: true,
+        voteCount: 42,
+        votePercentage: 84,
+      },
+      {
+        key: 'B',
+        label: 'OPSI B',
+        text: 'HTTP Long Polling',
+        symbol: '◆',
+        color: '#3B82F6',
+        bgColor: 'rgba(59, 130, 246, 0.15)',
+        borderColor: '#3B82F6',
+        isCorrect: false,
+        voteCount: 4,
+        votePercentage: 8,
+      },
+      {
+        key: 'C',
+        label: 'OPSI C',
+        text: 'Server-Sent Events (SSE)',
+        symbol: '●',
+        color: '#EAB308',
+        bgColor: 'rgba(234, 179, 8, 0.15)',
+        borderColor: '#EAB308',
+        isCorrect: false,
+        voteCount: 3,
+        votePercentage: 6,
+      },
+      {
+        key: 'D',
+        label: 'OPSI D',
+        text: 'DNS Round Robin',
+        symbol: '■',
+        color: '#22C55E',
+        bgColor: 'rgba(34, 197, 94, 0.15)',
+        borderColor: '#22C55E',
+        isCorrect: false,
+        voteCount: 1,
+        votePercentage: 2,
+      },
+    ],
+  },
+];
+
+export const SAMPLE_QUESTION: Question = INITIAL_QUESTIONS[0];
+
+export const LOBBY_PARTICIPANTS = [
+  { name: 'Budi', border: '#f5a623', text: '#f5a623' },
+  { name: 'Siti', border: '#51df9c', text: '#51df9c' },
+  { name: 'Dimas', border: '#bfd2ff', text: '#bfd2ff' },
+  { name: 'Adit', border: '#ffb4ab', text: '#ffb4ab' },
+  { name: 'Rian', border: '#51df9c', text: '#51df9c' },
+  { name: 'Fajar', border: '#ffc880', text: '#ffc880' },
+  { name: 'Sarah', border: '#94b6ff', text: '#94b6ff' },
+  { name: 'Nadia', border: '#ffb4ab', text: '#ffb4ab' },
+  { name: 'Farhan', border: '#f5a623', text: '#f5a623' },
+  { name: 'Maya', border: '#51df9c', text: '#51df9c' },
+  { name: 'Eko', border: '#ffc880', text: '#ffc880' },
+  { name: 'Rizky', border: '#bfd2ff', text: '#bfd2ff' },
+  { name: 'Kevin', border: '#51df9c', text: '#51df9c' },
+  { name: 'Putri', border: '#ffb4ab', text: '#ffb4ab' },
+  { name: 'Dwi', border: '#f5a623', text: '#f5a623' },
+  { name: 'Bayu', border: '#51df9c', text: '#51df9c' },
+  { name: 'Annisa', border: '#bfd2ff', text: '#bfd2ff' },
+  { name: 'Reza', border: '#ffc880', text: '#ffc880' },
+  { name: 'Cindy', border: '#51df9c', text: '#51df9c' },
+  { name: 'Aris', border: '#f5a623', text: '#f5a623' },
+  { name: 'Mega', border: '#94b6ff', text: '#94b6ff' },
+  { name: 'Gilang', border: '#51df9c', text: '#51df9c' },
+  { name: 'Tari', border: '#ffc880', text: '#ffc880' },
+  { name: 'Hendra', border: '#ffb4ab', text: '#ffb4ab' },
+];
+
+export const SCOREBOARD_TOP7: Player[] = [
+  {
+    id: 'p1',
+    name: 'Farhan',
+    avatarColor: '#f5a623',
+    borderColor: '#f5a623',
+    score: 4820,
+    rank: 1,
+    rankDelta: 2,
+    rankDeltaText: '↑2 NAIK',
+    streak: 3,
+    streakText: 'Streak: 3x Sempurna',
+    tag: 'LEADER',
+    note: 'Streak: 3x Sempurna',
+    accuracy: '100%',
+    avgSpeed: '1.18s',
+  },
+  {
+    id: 'p2',
+    name: 'Budi',
+    avatarColor: '#e1e2eb',
+    borderColor: '#e1e2eb',
+    score: 4650,
+    rank: 2,
+    rankDelta: 0,
+    rankDeltaText: '─ TETAP',
+    streak: 2,
+    streakText: 'Selisih: -170 pts',
+    tag: 'RUNNER-UP',
+    note: 'Selisih: -170 pts',
+    accuracy: '100%',
+    avgSpeed: '1.35s',
+  },
+  {
+    id: 'p3',
+    name: 'Sarah',
+    avatarColor: '#ffc880',
+    borderColor: '#ffc880',
+    score: 4310,
+    rank: 3,
+    rankDelta: 4,
+    rankDeltaText: '↑4 NAIK',
+    streak: 3,
+    streakText: 'Speed bonus max',
+    tag: '🔥 TOP 3',
+    note: 'Speed bonus max',
+    accuracy: '100%',
+    avgSpeed: '1.21s',
+  },
+  {
+    id: 'p4',
+    name: 'Dimas',
+    avatarColor: '#94a3b8',
+    borderColor: '#32353c',
+    score: 4100,
+    rank: 4,
+    rankDelta: -1,
+    rankDeltaText: '↓1 TURUN',
+    streak: 1,
+    streakText: 'Waktu: +0.4s',
+    note: 'Waktu: +0.4s',
+    accuracy: '100%',
+    avgSpeed: '1.62s',
+  },
+  {
+    id: 'p5',
+    name: 'Rizky',
+    avatarColor: '#94a3b8',
+    borderColor: '#32353c',
+    score: 3940,
+    rank: 5,
+    rankDelta: 3,
+    rankDeltaText: '↑3 NAIK',
+    streak: 2,
+    streakText: 'Streak: 2x',
+    note: 'Streak: 2x',
+    accuracy: '100%',
+    avgSpeed: '1.40s',
+  },
+  {
+    id: 'p6',
+    name: 'Siti',
+    avatarColor: '#94a3b8',
+    borderColor: '#32353c',
+    score: 3820,
+    rank: 6,
+    rankDelta: -2,
+    rankDeltaText: '↓2 TURUN',
+    streak: 1,
+    streakText: 'Jawaban Benar',
+    note: 'Jawaban Benar',
+    accuracy: '100%',
+    avgSpeed: '1.80s',
+  },
+  {
+    id: 'p7',
+    name: 'Fajar',
+    avatarColor: '#94a3b8',
+    borderColor: '#32353c',
+    score: 3650,
+    rank: 7,
+    rankDelta: 0,
+    rankDeltaText: '─ TETAP',
+    streak: 2,
+    streakText: 'Konsisten',
+    note: 'Konsisten',
+    accuracy: '100%',
+    avgSpeed: '1.92s',
+  },
+];
+
+export const FINAL_PODIUM = {
+  first: {
+    name: 'FARHAN',
+    letter: 'F',
+    title: 'THE SUPREME GRAND CHAMPION',
+    badge: 'CHAMPION',
+    score: 27840,
+    streakMax: '14X COMBO',
+    podiumLabel: 'PODIUM UTAMA I',
+    podiumNumber: '1ST',
+  },
+  second: {
+    name: 'BUDI',
+    letter: 'B',
+    title: 'PERAK ARENA',
+    badge: '2ND',
+    score: 26410,
+    accuracy: '93% AKURASI',
+    podiumLabel: 'PODIUM II',
+    podiumNumber: '2ND',
+  },
+  third: {
+    name: 'SARAH',
+    letter: 'S',
+    title: 'PERUNGGU ARENA',
+    badge: '3RD',
+    score: 25190,
+    accuracy: '87% AKURASI',
+    podiumLabel: 'PODIUM III',
+    podiumNumber: '3RD',
+  },
+  meta: {
+    roundsCompleted: '30 Soal Penuh',
+    totalCompetitors: '50 Total Peserta',
+    arenaAverage: '18.250 PTS',
+  },
+};

@@ -67,13 +67,9 @@ interface MockGameContextValue {
   rankings: ReturnType<typeof calculateRankings>;
 }
 
-const MockGameContext = createContext<MockGameContextValue | null>(null);
-
-export function MockGameProvider({ children }: { children: React.ReactNode }) {
-  const [isHostActionLoading, setIsHostActionLoading] = useState(false);
-  const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null);
-
-  const [room, setRoom] = useState<GameRoom>({
+function createInitialRoom(): GameRoom {
+  const baseTime = 1772840000000; // Deterministic static timestamp for initial mock state
+  return {
     code: 'BDA729',
     quizId: 'mock-quiz-1',
     quizTitle: 'BDCAHOOT Championship 2026',
@@ -91,7 +87,7 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
       'p-1': {
         id: 'p-1',
         name: 'ALDI',
-        joinedAt: Date.now() - 120000,
+        joinedAt: baseTime - 120000,
         connected: true,
         score: 0,
         totalResponseTimeMs: 0,
@@ -100,7 +96,7 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
       'p-2': {
         id: 'p-2',
         name: 'CITRA',
-        joinedAt: Date.now() - 90000,
+        joinedAt: baseTime - 90000,
         connected: true,
         score: 0,
         totalResponseTimeMs: 0,
@@ -109,16 +105,25 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
       'p-3': {
         id: 'p-3',
         name: 'BAGAS',
-        joinedAt: Date.now() - 40000,
+        joinedAt: baseTime - 40000,
         connected: true,
         score: 0,
         totalResponseTimeMs: 0,
         answers: {},
       },
     },
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  });
+    createdAt: baseTime,
+    updatedAt: baseTime,
+  };
+}
+
+const MockGameContext = createContext<MockGameContextValue | null>(null);
+
+export function MockGameProvider({ children }: { children: React.ReactNode }) {
+  const [isHostActionLoading, setIsHostActionLoading] = useState(false);
+  const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null);
+
+  const [room, setRoom] = useState<GameRoom>(createInitialRoom);
 
   const currentQuestion = useMemo(() => {
     if (room.stage === 'LOBBY' || room.stage === 'FINAL') return null;
