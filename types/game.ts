@@ -45,6 +45,29 @@ export interface ScoreboardRankItem {
   isTopTen: boolean;
 }
 
+/**
+ * Visual enrichment fields used for stage projector rendering and showcase views.
+ */
+export interface DisplayPlayerEnrichment {
+  avatarColor?: string;
+  borderColor?: string;
+  streak?: number;
+  streakText?: string;
+  tag?: string;
+  note?: string;
+  accuracy?: string;
+  avgSpeed?: string;
+}
+
+/**
+ * Scoreboard player model conforming to canonical Player while including ranking and display enrichment.
+ */
+export interface ArenaScoreboardPlayer extends Player, DisplayPlayerEnrichment {
+  rank: number;
+  rankDelta: number;
+  rankDeltaText: string;
+}
+
 export interface GameRoomSettings {
   shuffleQuestions: boolean;
   revealDurationMs: number; // 3000 to 5000 ms
