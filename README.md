@@ -106,16 +106,16 @@ Scores may collide due to integer rounding. Ties are broken without ambiguous ra
 
 ## Tech Stack
 
-| Layer | Technology | Rationale |
-| :--- | :--- | :--- |
-| **Framework** | Next.js 15 (App Router) | High-performance server rendering & modern React 19 integration |
-| **Language** | TypeScript 5.9 (Strict) | Total type-safety for network contracts and game states |
-| **Styling** | Tailwind CSS v4 | Lightweight CSS tokens, modern theme engine, zero runtime overhead |
-| **Display Typography** | Anybody (Google Fonts) | High-impact condensed geometric display for stage legibility |
-| **Body Typography** | Space Grotesk (Google Fonts) | Clean, technical, non-generic sans-serif for UI clarity |
-| **Realtime Engine** | Socket.io (Client & Server) | Resilient duplex communication over local WiFi without cloud lock-in |
-| **Persistence** | Embedded SQLite (Local) | Fast, zero-config local storage for question banks and room metrics |
-| **Animation** | Motion / CSS Transforms | Smooth hardware-accelerated score counters and rank movement |
+| Layer | Technology | Rationale | Status |
+| :--- | :--- | :--- | :---: |
+| **Framework** | Next.js 15 (App Router) | High-performance server rendering & modern React 19 integration | Active ✅ |
+| **Language** | TypeScript 5.9 (Strict) | Total type-safety for network contracts and game states | Active ✅ |
+| **Styling** | Tailwind CSS v4 | Lightweight CSS tokens, modern theme engine, zero runtime overhead | Active ✅ |
+| **Display Typography** | Anybody (Google Fonts) | High-impact condensed geometric display for stage legibility | Active ✅ |
+| **Body Typography** | Space Grotesk (Google Fonts) | Clean, technical, non-generic sans-serif for UI clarity | Active ✅ |
+| **Realtime Engine** | Socket.io (Client & Server) | Resilient duplex communication over local WiFi without cloud lock-in | *Planned Phase 8* (using `MockGameContext`) |
+| **Persistence** | Embedded SQLite (Local) | Fast, zero-config local storage for question banks and room metrics | *Planned Phase 9* |
+| **Animation** | Motion / CSS Transforms | Smooth hardware-accelerated score counters and rank movement | Active ✅ |
 
 ---
 
@@ -130,8 +130,8 @@ Scores may collide due to integer rounding. Ties are broken without ambiguous ra
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/your-username/bdcahoot-minigames.git
-   cd bdcahoot-minigames
+   git clone https://github.com/alifaguslerian512/bdcahoot-live-arena.git
+   cd bdcahoot-live-arena
    ```
 
 2. **Install dependencies:**
@@ -172,11 +172,12 @@ npm run lint
 
 ## Documentation Index
 
-- [Architecture & Network Topology](ARCHITECTURE.md)
-- [Design System & Visual Tokens](DESIGN_SYSTEM.md)
-- [Project Roadmap & Milestones](ROADMAP.md)
+- [Architecture & Network Topology](docs/ARCHITECTURE.md)
+- [Design System & Visual Tokens](docs/DESIGN_SYSTEM.md)
+- [Project Roadmap & Milestones](docs/ROADMAP.md)
 - [Security & Anti-Cheating Guidelines](SECURITY.md)
 - [Contributing Guidelines](CONTRIBUTING.md)
+- [Changelog](CHANGELOG.md)
 
 ---
 
