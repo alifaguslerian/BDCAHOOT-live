@@ -26,3 +26,32 @@ export interface QuizValidationResult {
   incompleteQuestionIndices: number[];
   errors: string[];
 }
+
+/**
+ * Display-enriched option representation for the stage projector reveal phase.
+ */
+export interface ArenaDisplayOption {
+  key: OptionId;
+  label: string;
+  text: string;
+  symbol: string;
+  color: string;
+  bgColor: string;
+  borderColor: string;
+  isCorrect: boolean;
+  voteCount: number;
+  votePercentage: number;
+}
+
+/**
+ * Display-enriched question for stage projector rendering with metadata and aggregated stats.
+ */
+export interface ArenaDisplayQuestion {
+  id: string;
+  number: number;
+  totalQuestions: number;
+  category: string;
+  points: number;
+  question: string;
+  options: [ArenaDisplayOption, ArenaDisplayOption, ArenaDisplayOption, ArenaDisplayOption];
+}
