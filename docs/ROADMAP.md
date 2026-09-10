@@ -47,13 +47,13 @@
 
 ---
 
-### Phase 3: Host Quiz Management (Pre-Game) 📋
-- [ ] **D1 Landing Page**: High-contrast Hero with dual CTAs (`START (HOST)` and `MASUK (PESERTA)`).
-- [ ] **D2 Quiz Library**: Saved quizzes list, draft badge, incomplete question indicator, `MAIN` disabled guard.
-- [ ] **D3 Quiz Editor**: Question reordering, add/remove questions, autosave status indicator.
-- [ ] **D4 Soal Editor**: Question text, 4 options, radio-button single correct selection, timer presets (10s/15s/20s/30s).
-- [ ] **D5 Game Settings**: Quiz summary, question shuffle toggle, "BUAT ROOM" generation (`BDA729`).
-- **Verification Gate**: Host can create, edit, validate, and launch a complete quiz without database errors.
+### Phase 3: Host Quiz Management (Pre-Game) ✅
+- [x] **D1 Landing Page**: High-contrast Hero with dual CTAs (`START (HOST)` and `MASUK (PESERTA)`), integrated PIN modal and Web Audio feedback (`HostLanding.tsx`).
+- [x] **D2 Quiz Library**: Persistent stored quiz list, draft vs siap badges, duration metrics, incomplete question indicator, `MAIN` disabled guard (`app/host/library/page.tsx`).
+- [x] **D3 Quiz Editor**: Question reordering (Up/Down), add/delete questions with 1-question minimum guard, autosave status indicator (`components/host/QuizEditorView.tsx`).
+- [x] **D4 Soal Editor**: Question text, 4 options (▲, ◆, ●, ■), radio-button single correct selection, timer presets (10s/15s/20s/30s) (`components/host/QuizEditorView.tsx`).
+- [x] **D5 Game Settings**: Quiz summary, question shuffle toggle, reveal duration presets, "BUAT ROOM" generation (`BDA729`) (`components/host/GameSettingsView.tsx`).
+- **Verification Gate**: Passed `test:phase3` (8/8 unit assertions passed) and `compile_applet` (100% clean Next.js build).
 
 ---
 
