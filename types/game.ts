@@ -71,6 +71,7 @@ export interface ArenaScoreboardPlayer extends Player, DisplayPlayerEnrichment {
 export interface GameRoomSettings {
   shuffleQuestions: boolean;
   revealDurationMs: number; // 3000 to 5000 ms
+  customRoomCode?: string; // Optional fixed room code override
 }
 
 export interface GameRoom {
