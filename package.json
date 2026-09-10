@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test:phase3": "node scripts/verify-phase3.mjs",
+    "test:perf": "node scripts/verify-stress-performance.mjs",
     "clean": "next clean"
   },
   "dependencies": {
