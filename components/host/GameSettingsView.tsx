@@ -19,6 +19,7 @@ import { getQuizById } from '@/lib/quizStore';
 import { validateQuiz } from '@/lib/validation';
 import { useMockGame } from '@/context/MockGameContext';
 import { sound } from '@/lib/soundFX';
+import { generateRoomCode } from '@/lib/constants';
 
 interface GameSettingsViewProps {
   quizId: string;
@@ -32,6 +33,7 @@ export function GameSettingsView({ quizId }: GameSettingsViewProps) {
   // Settings State
   const [shuffleQuestions, setShuffleQuestions] = useState(false);
   const [revealDurationSec, setRevealDurationSec] = useState<3 | 4 | 5>(4);
+  const [previewRoomCode] = useState(() => generateRoomCode());
   const [isCreating, setIsCreating] = useState(false);
 
   if (!quiz) {
@@ -67,6 +69,7 @@ export function GameSettingsView({ quizId }: GameSettingsViewProps) {
     const roomCode = createRoomFromQuiz(quiz, {
       shuffleQuestions,
       revealDurationMs: revealDurationSec * 1000,
+      customRoomCode: previewRoomCode,
     });
 
     setTimeout(() => {
@@ -248,7 +251,7 @@ export function GameSettingsView({ quizId }: GameSettingsViewProps) {
                 PREVIEW KODE ROOM ARENA
               </span>
               <span className="font-anybody font-extrabold text-3xl tracking-[0.15em] text-[#e1e2eb]">
-                BDA 729
+                {previewRoomCode.slice(0, 3)} {previewRoomCode.slice(3)}
               </span>
               <span className="text-xs text-[#8b93a1] font-space">
                 Peserta dapat bergabung menggunakan PIN ini di HP mereka.
