@@ -44,8 +44,10 @@ export default function HostManagePage() {
     saveQuiz(quizToSave);
 
     // Initialize room in engine
+    const sanitizedCode = settings.roomCode.replace(/\s+/g, '').toUpperCase();
     const roomCode = createRoomFromQuiz(quizToSave, {
       shuffleQuestions: settings.shuffle,
+      customRoomCode: sanitizedCode,
     });
 
     router.push(`/host/room/${roomCode}`);
