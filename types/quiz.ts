@@ -16,6 +16,7 @@ export interface QuizQuestion {
 export interface Quiz {
   id: string;
   title: string;
+  category?: string;
   questions: QuizQuestion[];
   createdAt: number;
   updatedAt: number;
