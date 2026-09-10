@@ -63,3 +63,27 @@ export const TIMER_PRESETS = [10, 15, 20, 30] as const;
 export const DEFAULT_TIMER_SECONDS = 20;
 export const REVEAL_DURATION_MS = 4000; // 3-5 seconds auto-transition to scoreboard
 export const MIN_PLAYERS_TO_START = 1;
+
+/** Anti-cheat & Network Late Packet Grace Period */
+export const ANSWER_GRACE_PERIOD_MS = 200;
+
+/** High-concurrency state update batch throttle window */
+export const BATCH_FLUSH_INTERVAL_MS = 300;
+
+/** Default fallback room code for dev/test */
+export const DEFAULT_ROOM_CODE = 'BDA729';
+
+/**
+ * Generate a randomized 6-character room PIN.
+ * Prefix: BDA (Bandung Digital Campus / BDCAHOOT brand)
+ * Suffix: 3 unambiguous alphanumeric characters (no 0, O, 1, I)
+ */
+export function generateRoomCode(): string {
+  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  let suffix = '';
+  for (let i = 0; i < 3; i++) {
+    const idx = Math.floor(Math.random() * chars.length);
+    suffix += chars[idx];
+  }
+  return `BDA${suffix}`;
+}
