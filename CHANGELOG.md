@@ -28,6 +28,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.0] - 2026-09-09
+
+### Added
+- **Phase 3 Complete: Host Quiz Management (Pre-Game)**
+  - `components/host/HostLanding.tsx`: High-contrast dual CTA hero with 6-digit PIN modal, interactive sound effects, and stage routing.
+  - `app/host/library/page.tsx`: Quiz Library dashboard with persistent storage, ready vs draft indicators, duration calculator, incomplete question warning banner, and delete safeguard modal.
+  - `components/host/QuizEditorView.tsx` & `app/host/quiz/[id]/edit/page.tsx`: Full interactive quiz & question editor supporting dynamic reordering (Up/Down), add/delete questions with 1-question minimum guard, timer presets (10s/15s/20s/30s), 4-option geometry badges (▲, ◆, ●, ■), and instant autosave.
+  - `components/host/GameSettingsView.tsx` & `app/host/quiz/[id]/settings/page.tsx`: Pre-game configuration screen with question shuffling toggle, reveal duration presets (3s/4s/5s), room preview (`BDA 729`), and room launch engine.
+  - `lib/quizStore.ts`: Persistent local quiz store with pre-seeded competition quizzes (`BDCAHOOT Championship 2026`, `Web Architecture Trivia`, draft template).
+  - `lib/soundFX.ts`: Non-blocking browser Web Audio synthesizer for tactile UI clicks, success chimes, and validation alerts.
+  - `scripts/verify-phase3.mjs`: Automated regression test suite covering quiz validation, name sanitization, question shuffling, and timer bounds.
+
+---
+
 ## [0.1.0] - 2026-09-07
 
 ### Added
