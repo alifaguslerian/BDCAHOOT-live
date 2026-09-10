@@ -1,8 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useState, useMemo } from 'react';
-import type { GameStage, GameRoom, Player } from '@/types/game';
-import type { QuizQuestion, OptionId } from '@/types/quiz';
+import type { GameStage, GameRoom, Player, GameRoomSettings } from '@/types/game';
+import type { QuizQuestion, OptionId, Quiz } from '@/types/quiz';
 import { calculateQuestionPoints, calculateRankings } from '@/lib/scoring';
 import { validatePlayerName, validateQuiz } from '@/lib/validation';
 import { REVEAL_DURATION_MS, DEFAULT_TIMER_SECONDS } from '@/lib/constants';
@@ -57,6 +57,7 @@ interface MockGameContextValue {
   startQuiz: () => void;
   finishQuiz: () => void;
   resetRoom: () => void;
+  createRoomFromQuiz: (quiz: Quiz, customSettings?: Partial<GameRoomSettings>) => string;
   isHostActionLoading: boolean;
   // Player Actions
   joinRoomAsPlayer: (name: string) => { success: boolean; error?: string; playerId?: string };
@@ -231,6 +232,64 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
     }));
   };
 
+  const createRoomFromQuiz = (quiz: Quiz, customSettings?: Partial<GameRoomSettings>): string => {
+    const code = 'BDA729';
+    let questionsToUse = [...quiz.questions];
+    if (customSettings?.shuffleQuestions) {
+      questionsToUse = [...questionsToUse].sort(() => Math.random() - 0.5);
+    }
+
+    const now = Date.now();
+    setRoom({
+      code,
+      quizId: quiz.id,
+      quizTitle: quiz.title,
+      hostSessionId: `host-${now}`,
+      stage: 'LOBBY',
+      currentQuestionIndex: 0,
+      questions: questionsToUse,
+      settings: {
+        shuffleQuestions: customSettings?.shuffleQuestions ?? false,
+        revealDurationMs: customSettings?.revealDurationMs ?? REVEAL_DURATION_MS,
+      },
+      questionStartedAtMs: null,
+      questionEndsAtMs: null,
+      players: {
+        'p-1': {
+          id: 'p-1',
+          name: 'ALDI',
+          joinedAt: now - 120000,
+          connected: true,
+          score: 0,
+          totalResponseTimeMs: 0,
+          answers: {},
+        },
+        'p-2': {
+          id: 'p-2',
+          name: 'CITRA',
+          joinedAt: now - 90000,
+          connected: true,
+          score: 0,
+          totalResponseTimeMs: 0,
+          answers: {},
+        },
+        'p-3': {
+          id: 'p-3',
+          name: 'BAGAS',
+          joinedAt: now - 40000,
+          connected: true,
+          score: 0,
+          totalResponseTimeMs: 0,
+          answers: {},
+        },
+      },
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    return code;
+  };
+
   // PLAYER ACTION: Join Room with strict validation (A-Z only, case-insensitive uniqueness)
   const joinRoomAsPlayer = (name: string): { success: boolean; error?: string; playerId?: string } => {
     const existingNames = Object.values(room.players).map((p) => p.name);
@@ -337,6 +396,7 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
         startQuiz,
         finishQuiz,
         resetRoom,
+        createRoomFromQuiz,
         isHostActionLoading,
         joinRoomAsPlayer,
         submitAnswer,
