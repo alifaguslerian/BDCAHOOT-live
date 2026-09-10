@@ -15,6 +15,7 @@ import {
   Save,
 } from 'lucide-react';
 import { sound } from '@/lib/soundFX';
+import { generateRoomCode } from '@/lib/constants';
 
 export interface QuizItem {
   id: string;
@@ -110,6 +111,7 @@ export const HostQuizManagement: React.FC<HostQuizManagementProps> = ({
   const [activeQuestionIndex, setActiveQuestionIndex] = useState<number>(0);
   const [isSavedBanner, setIsSavedBanner] = useState<boolean>(false);
   const [shuffleQuestions, setShuffleQuestions] = useState<boolean>(true);
+  const [generatedRoomCode] = useState<string>(() => generateRoomCode());
 
   const currentQuiz = quizzes.find((q) => q.id === selectedQuizId) || quizzes[0];
   const activeQuestion = currentQuiz?.questions[activeQuestionIndex];
@@ -676,7 +678,7 @@ export const HostQuizManagement: React.FC<HostQuizManagementProps> = ({
                   KODE ROOM GENERATED
                 </span>
                 <span className="font-anybody font-black text-2xl text-[#f5a623] tracking-widest">
-                  BDA 729
+                  {generatedRoomCode.slice(0, 3)} {generatedRoomCode.slice(3)}
                 </span>
               </div>
 
@@ -685,7 +687,7 @@ export const HostQuizManagement: React.FC<HostQuizManagementProps> = ({
                   sound.playTap();
                   onCreateRoomWithQuiz(currentQuiz, {
                     shuffle: shuffleQuestions,
-                    roomCode: 'BDA 729',
+                    roomCode: generatedRoomCode,
                   });
                 }}
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl bg-[#f5a623] text-[#452b00] font-anybody font-extrabold text-sm tracking-wide uppercase hover:bg-[#ffb4ab] transition-all shadow-lg hover:scale-[1.02] cursor-pointer"
