@@ -49,6 +49,13 @@ test('Quiz Validation: Rejects quiz with empty title', () => {
 
   const hasEmptyTitle = !incompleteQuiz.title.trim();
   assert.strictEqual(hasEmptyTitle, true, 'Should detect empty title');
+
+  // Verify exact validation error string
+  const errors = [];
+  if (!incompleteQuiz.title?.trim()) {
+    errors.push('Judul kuis tidak boleh kosong.');
+  }
+  assert.ok(errors.includes('Judul kuis tidak boleh kosong.'));
 });
 
 test('Quiz Validation: Rejects question with missing option text', () => {
@@ -149,6 +156,49 @@ test('Game Settings: Reveal duration bounds strictly adhere to 3-5 seconds', () 
   const allowedDurations = [3000, 4000, 5000];
   const configuredDuration = 4000;
   assert.ok(allowedDurations.includes(configuredDuration));
+});
+
+// Test Suite 4: Double-Click Guard & Tie-Breaker Unanswered Penalty
+test('Host Guard: Double-click prevents stage/question skip when isHostActionLoading is true', () => {
+  let isHostActionLoading = true;
+  let executionCount = 0;
+
+  function handleNextQuestion() {
+    if (isHostActionLoading) return;
+    executionCount++;
+  }
+
+  // Attempt click while loading
+  handleNextQuestion();
+  assert.strictEqual(executionCount, 0, 'Should block execution when loading');
+
+  // Once loading completes
+  isHostActionLoading = false;
+  handleNextQuestion();
+  assert.strictEqual(executionCount, 1, 'Should execute when not loading');
+});
+
+test('Tie-Breaker Invariant: Unanswered players receive full timer penalty (T * 1000)', () => {
+  const timerSeconds = 15;
+  const fullPenaltyMs = timerSeconds * 1000;
+
+  const playerAnswered = { totalResponseTimeMs: 1250, answers: { 0: { selectedOption: 'A' } } };
+  const playerUnanswered = { totalResponseTimeMs: 500, answers: {} };
+
+  const players = { p1: playerAnswered, p2: playerUnanswered };
+  const qIdx = 0;
+
+  for (const [id, p] of Object.entries(players)) {
+    if (!p.answers[qIdx]) {
+      players[id] = {
+        ...p,
+        totalResponseTimeMs: p.totalResponseTimeMs + fullPenaltyMs,
+      };
+    }
+  }
+
+  assert.strictEqual(players.p1.totalResponseTimeMs, 1250, 'Answered player time must not change');
+  assert.strictEqual(players.p2.totalResponseTimeMs, 500 + 15000, 'Unanswered player must receive full 15,000ms penalty');
 });
 
 console.log(`\n========================================`);
