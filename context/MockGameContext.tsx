@@ -143,6 +143,40 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
   // High-performance mutable answer store & batch queue (avoids 270KB deep clone per player tap)
   const pendingAnswersRef = useRef<Map<string, PendingAnswerRecord>>(new Map());
   const answersStoreRef = useRef<Map<string, Record<number, PlayerAnswer>>>(new Map());
+  const penalizedQuestionsRef = useRef<Set<number>>(new Set());
+
+  // Helper: Apply full response time penalty (T) for players who did not answer the active question
+  const applyTieBreakerPenalty = useCallback(
+    (
+      players: Record<string, Player>,
+      questions: QuizQuestion[],
+      qIdx: number
+    ): Record<string, Player> => {
+      if (penalizedQuestionsRef.current.has(qIdx)) {
+        return players;
+      }
+      const currentQ = questions[qIdx];
+      if (!currentQ) return players;
+
+      penalizedQuestionsRef.current.add(qIdx);
+      const penaltyMs = (currentQ.timerSeconds ?? DEFAULT_TIMER_SECONDS) * 1000;
+      let changed = false;
+      const nextPlayers = { ...players };
+
+      for (const [pId, p] of Object.entries(players)) {
+        if (!p.answers[qIdx]) {
+          changed = true;
+          nextPlayers[pId] = {
+            ...p,
+            totalResponseTimeMs: p.totalResponseTimeMs + penaltyMs,
+          };
+        }
+      }
+
+      return changed ? nextPlayers : players;
+    },
+    []
+  );
 
   // Flush pending answers into the room state in a single atomic batch
   const flushPendingAnswers = useCallback(() => {
@@ -273,6 +307,7 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    penalizedQuestionsRef.current.clear();
     flushPendingAnswers();
 
     const duration = room.questions[0]?.timerSeconds ?? DEFAULT_TIMER_SECONDS;
@@ -290,16 +325,25 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
 
   // HOST ACTION: Next Question / Scoreboard -> Question
   const nextQuestion = () => {
+    if (isHostActionLoading) return;
     setIsHostActionLoading(true);
     flushPendingAnswers();
 
     setTimeout(() => {
       setRoom((prev) => {
+        // Apply full response time penalty for unanswered players if transitioning away
+        const currentPlayers = applyTieBreakerPenalty(
+          prev.players,
+          prev.questions,
+          prev.currentQuestionIndex
+        );
+
         const nextIdx = prev.currentQuestionIndex + 1;
         if (nextIdx >= prev.questions.length) {
           return {
             ...prev,
             stage: 'FINAL',
+            players: currentPlayers,
             updatedAt: Date.now(),
           };
         }
@@ -312,6 +356,7 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
           currentQuestionIndex: nextIdx,
           questionStartedAtMs: now,
           questionEndsAtMs: now + duration * 1000,
+          players: currentPlayers,
           updatedAt: now,
         };
       });
@@ -320,15 +365,25 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
   };
 
   const finishQuiz = () => {
+    if (isHostActionLoading) return;
     setIsHostActionLoading(true);
     flushPendingAnswers();
 
     setTimeout(() => {
-      setRoom((prev) => ({
-        ...prev,
-        stage: 'FINAL',
-        updatedAt: Date.now(),
-      }));
+      setRoom((prev) => {
+        const currentPlayers = applyTieBreakerPenalty(
+          prev.players,
+          prev.questions,
+          prev.currentQuestionIndex
+        );
+
+        return {
+          ...prev,
+          stage: 'FINAL',
+          players: currentPlayers,
+          updatedAt: Date.now(),
+        };
+      });
       setIsHostActionLoading(false);
     }, 300);
   };
@@ -337,16 +392,31 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
     // Synchronously flush all buffered answers prior to stage transition (e.g. into REVEAL)
     flushPendingAnswers();
 
-    setRoom((prev) => ({
-      ...prev,
-      stage: newStage,
-      updatedAt: Date.now(),
-    }));
+    setRoom((prev) => {
+      let nextPlayers = prev.players;
+
+      // When transitioning to REVEAL, ensure non-responding players receive full timer penalty
+      if (newStage === 'REVEAL') {
+        nextPlayers = applyTieBreakerPenalty(
+          prev.players,
+          prev.questions,
+          prev.currentQuestionIndex
+        );
+      }
+
+      return {
+        ...prev,
+        stage: newStage,
+        players: nextPlayers,
+        updatedAt: Date.now(),
+      };
+    });
   };
 
   const resetRoom = () => {
     pendingAnswersRef.current.clear();
     answersStoreRef.current.clear();
+    penalizedQuestionsRef.current.clear();
 
     setRoom((prev) => ({
       ...prev,
@@ -369,6 +439,7 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
 
     pendingAnswersRef.current.clear();
     answersStoreRef.current.clear();
+    penalizedQuestionsRef.current.clear();
 
     const now = Date.now();
     setRoom({
