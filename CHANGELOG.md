@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Strict security configuration in `.gitignore` protecting local SQLite databases and environment files.
 
 ### Changed
+- Core & Phase 3 Reviewer Refinements:
+  - `lib/constants.ts` & `PlayerTapPad.tsx`: Verified UTF-8 valid geometric glyphs (`▲`, `◆`, `●`, `■`) and checkmark indicator (`✓`).
+  - `context/MockGameContext.tsx`: Added double-click guard (`if (isHostActionLoading) return;`) in `nextQuestion()` and `finishQuiz()`.
+  - `context/MockGameContext.tsx`: Implemented unanswered player tie-breaker penalty (`totalResponseTimeMs += currentQuestion.timerSeconds * 1000`) during `REVEAL` and question transitions with duplicate-prevention tracking.
+  - `lib/validation.ts`: Added strict quiz title validation (`if (!quiz.title?.trim()) errors.push('Judul kuis tidak boleh kosong.')`) in `validateQuiz()`.
+  - `scripts/verify-phase3.mjs`: Added automated test cases for title validation errors, host double-click guard, and unanswered player penalty invariance.
 - Refactored `hooks/use-mobile.ts` to utilize `React.useSyncExternalStore` for SSR-safe, hydration-safe responsive viewport detection.
 - Unified canonical type system: eliminated duplicate `Player` and `Question` interfaces by introducing `ArenaDisplayQuestion` and `ArenaScoreboardPlayer` extending canonical models in `types/`.
 - Updated `package.json` project name to `bdcahoot-live-arena` and removed unused `firebase-tools`.
