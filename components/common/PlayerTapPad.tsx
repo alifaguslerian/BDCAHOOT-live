@@ -116,7 +116,7 @@ export const PlayerTapPad: React.FC<PlayerTapPadProps> = ({
             {/* Locked checkmark indicator on the selected button */}
             {isChosen && (
               <div className="absolute top-2.5 right-2.5 w-6 h-6 rounded-full bg-white text-black flex items-center justify-center font-black text-xs shadow-md">
-                ✓
+                {'\u2713'}
               </div>
             )}
           </button>
