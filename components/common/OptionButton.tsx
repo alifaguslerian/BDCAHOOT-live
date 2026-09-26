@@ -121,7 +121,7 @@ export const OptionButton: React.FC<OptionButtonProps> = ({
               className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white text-black flex items-center justify-center font-anybody font-black text-lg sm:text-xl shadow-md animate-bounce"
               title="Jawaban Benar"
             >
-              ✓
+              {'\u2713'}
             </div>
           )}
         </div>
