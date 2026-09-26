@@ -84,6 +84,10 @@ export function validateQuiz(quiz: Quiz): QuizValidationResult {
   const errors: string[] = [];
   const incompleteQuestionIndices: number[] = [];
 
+  if (!quiz.title?.trim()) {
+    errors.push('Judul kuis tidak boleh kosong.');
+  }
+
   if (!quiz.questions || quiz.questions.length === 0) {
     errors.push('Quiz harus memiliki minimal 1 soal.');
     return { isValid: false, incompleteQuestionIndices, errors };
@@ -98,7 +102,7 @@ export function validateQuiz(quiz: Quiz): QuizValidationResult {
   });
 
   return {
-    isValid: incompleteQuestionIndices.length === 0,
+    isValid: errors.length === 0,
     incompleteQuestionIndices,
     errors,
   };
