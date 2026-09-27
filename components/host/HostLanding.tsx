@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { ArrowRight, LogIn, Monitor, Smartphone, X, User } from 'lucide-react';
 import { sound } from '@/lib/soundFX';
 
@@ -48,35 +49,36 @@ export const HostLanding: React.FC<HostLandingProps> = ({ onStartHost, onEnterPl
             </span>
           </div>
 
-          <nav className="hidden md:flex items-center gap-8">
-            <button
-              onClick={onStartHost}
+          <nav className="hidden md:flex items-center gap-8" aria-label="Navigasi Utama">
+            <Link
+              href="/host/library"
               className="text-[#ffc880] font-semibold hover:text-[#ffddb4] transition-colors"
             >
               Arena Stage
-            </button>
-            <button
-              onClick={handleOpenPin}
+            </Link>
+            <Link
+              href="/player/join"
               className="text-[#d7c3ae] hover:text-[#e1e2eb] transition-colors"
             >
-              Game Modes
-            </button>
-            <button
-              onClick={onStartHost}
+              Player Join
+            </Link>
+            <Link
+              href="/host/library"
               className="text-[#d7c3ae] hover:text-[#e1e2eb] transition-colors"
             >
               Host Console
-            </button>
+            </Link>
             <button
-              onClick={onStartHost}
-              className="text-[#d7c3ae] hover:text-[#e1e2eb] transition-colors"
+              type="button"
+              onClick={handleOpenPin}
+              className="text-[#d7c3ae] hover:text-[#e1e2eb] transition-colors cursor-pointer"
             >
-              Spectate
+              Quick PIN
             </button>
           </nav>
 
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-[#ffc880] flex items-center justify-center text-[#452b00]">
+            <div className="w-8 h-8 rounded-full bg-[#ffc880] flex items-center justify-center text-[#452b00]" aria-hidden="true">
               <User className="w-4 h-4" />
             </div>
           </div>
@@ -86,15 +88,15 @@ export const HostLanding: React.FC<HostLandingProps> = ({ onStartHost, onEnterPl
       {/* Main Content Area */}
       <main className="w-full pt-20 pb-16 flex-1 flex flex-col justify-center items-center">
         <div className="relative w-full overflow-hidden px-6 lg:px-12 py-12 md:py-16 flex flex-col items-center justify-center">
-          {/* Subtle Ambient Radial Glow */}
-          <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-40">
-            <div className="w-[720px] h-[360px] rounded-full bg-[#f5a623]/10 blur-[120px]"></div>
+          {/* Subtle Ambient Radial Glow (GPU Accelerated) */}
+          <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-30 transform-gpu will-change-transform">
+            <div className="w-[600px] h-[300px] rounded-full bg-[#f5a623]/10 blur-[80px]"></div>
           </div>
 
           <div className="relative z-10 w-full max-w-5xl mx-auto flex flex-col items-center text-center">
             {/* Tag Badge */}
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#1d2026] shadow-sm mb-6 border border-[#32353c]/50">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#51df9c] animate-pulse"></span>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#51df9c] animate-pulse" aria-hidden="true"></span>
               <span className="text-xs font-bold tracking-widest text-[#d7c3ae] uppercase font-space">
                 ARENA MINIGAMES PLATFORM
               </span>
@@ -111,16 +113,15 @@ export const HostLanding: React.FC<HostLandingProps> = ({ onStartHost, onEnterPl
             {/* Two Action Cards Grid */}
             <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
               {/* Card 1: START / HOST MODE */}
-              <div
+              <Link
+                href="/host/library"
                 id="card-host"
-                onClick={() => {
-                  sound.playTap();
-                  onStartHost();
-                }}
+                onClick={() => sound.playTap()}
+                aria-label="Mulai Host Mode - Buka Quiz Library"
                 className="group relative flex flex-col justify-between p-8 rounded-xl bg-[#151a22] border border-[#272a31] hover:border-[#ffc880]/60 hover:bg-[#1d2026] transition-all duration-200 cursor-pointer shadow-lg hover:scale-[1.01]"
               >
                 <div className="flex flex-col">
-                  <div className="w-12 h-12 rounded-lg bg-[#32353c] flex items-center justify-center text-[#ffc880] mb-6 group-hover:bg-[#ffc880] group-hover:text-[#452b00] transition-colors duration-200">
+                  <div className="w-12 h-12 rounded-lg bg-[#32353c] flex items-center justify-center text-[#ffc880] mb-6 group-hover:bg-[#ffc880] group-hover:text-[#452b00] transition-colors duration-200" aria-hidden="true">
                     <Monitor className="w-6 h-6 stroke-[2]" />
                   </div>
                   <div className="flex items-baseline gap-2 mb-2">
@@ -136,24 +137,30 @@ export const HostLanding: React.FC<HostLandingProps> = ({ onStartHost, onEnterPl
                   </p>
                 </div>
                 <div className="pt-2">
-                  <button
-                    type="button"
-                    className="w-full py-3 px-5 rounded bg-[#f5a623] text-[#452b00] font-bold text-sm uppercase tracking-wider flex items-center justify-between group-hover:bg-[#ffc880] transition-colors shadow-md"
-                  >
+                  <div className="w-full py-3 px-5 rounded bg-[#f5a623] text-[#452b00] font-bold text-sm uppercase tracking-wider flex items-center justify-between group-hover:bg-[#ffc880] transition-colors shadow-md">
                     <span>Buka Quiz Library</span>
                     <ArrowRight className="w-5 h-5 transition-transform duration-200 group-hover:translate-x-1" />
-                  </button>
+                  </div>
                 </div>
-              </div>
+              </Link>
 
               {/* Card 2: MASUK / PLAYER DEVICE */}
               <div
                 id="card-player"
                 onClick={handleOpenPin}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleOpenPin();
+                  }
+                }}
+                aria-label="Masuk sebagai Player - Buka Form PIN Ruang"
                 className="group relative flex flex-col justify-between p-8 rounded-xl bg-[#151a22] border border-[#272a31] hover:border-[#3b82f6]/60 hover:bg-[#1d2026] transition-all duration-200 cursor-pointer shadow-lg hover:scale-[1.01]"
               >
                 <div className="flex flex-col">
-                  <div className="w-12 h-12 rounded-lg bg-[#32353c] flex items-center justify-center text-[#e1e2eb] mb-6 group-hover:bg-[#363940] transition-colors duration-200">
+                  <div className="w-12 h-12 rounded-lg bg-[#32353c] flex items-center justify-center text-[#e1e2eb] mb-6 group-hover:bg-[#363940] transition-colors duration-200" aria-hidden="true">
                     <Smartphone className="w-6 h-6 stroke-[2]" />
                   </div>
                   <div className="flex items-baseline gap-2 mb-2">
@@ -168,14 +175,20 @@ export const HostLanding: React.FC<HostLandingProps> = ({ onStartHost, onEnterPl
                     Masukkan PIN room 6 digit dari layar panggung untuk bergabung sebagai kontestan dari smartphone atau laptop.
                   </p>
                 </div>
-                <div className="pt-2">
-                  <button
-                    type="button"
-                    className="w-full py-3 px-5 rounded bg-[#32353c] text-[#e1e2eb] font-bold text-sm uppercase tracking-wider flex items-center justify-between group-hover:bg-[#363940] hover:text-white transition-colors shadow-md"
-                  >
+                <div className="pt-2 flex flex-col gap-2">
+                  <div className="w-full py-3 px-5 rounded bg-[#32353c] text-[#e1e2eb] font-bold text-sm uppercase tracking-wider flex items-center justify-between group-hover:bg-[#363940] hover:text-white transition-colors shadow-md">
                     <span>Masukkan Kode Room</span>
                     <LogIn className="w-5 h-5 transition-transform duration-200 group-hover:translate-x-1" />
-                  </button>
+                  </div>
+                  <div className="text-right">
+                    <Link
+                      href="/player/join"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-xs text-[#d7c3ae] hover:text-[#ffc880] underline transition-colors"
+                    >
+                      Buka form join langsung &rarr;
+                    </Link>
+                  </div>
                 </div>
               </div>
             </div>
