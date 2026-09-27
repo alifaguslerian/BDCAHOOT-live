@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test:phase3": "node scripts/verify-phase3.mjs",
     "test:phase4": "node scripts/verify-phase4.mjs",
+    "test:phase5": "node scripts/verify-phase5.mjs",
     "test:perf": "node scripts/verify-stress-performance.mjs",
     "clean": "next clean"
   },
