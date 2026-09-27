@@ -1,7 +1,7 @@
 # Implementation Roadmap & Milestone Tracker
 
 > Modular 9-Phase Engineering Plan for BDCAHOOT Live Arena. Updated continuously per phase release.
-> **Last Updated**: 2026-09-27 | **Current Phase**: Phase 5 (Host Arena Engine)
+> **Last Updated**: 2026-09-27 | **Current Phase**: Phase 6 (Player Mobile Controller)
 
 ---
 
@@ -13,7 +13,7 @@
 | **Phase 2** | **Design System & UI Tokens** | Typography, Stitch tokens, option badges, arena datasets | **COMPLETED ✅** |
 | **Phase 3** | **Host Quiz Management** | Quiz Library, Quiz Editor, Soal Editor, Game Settings | **COMPLETED ✅** |
 | **Phase 4** | **Player Onboarding** | Room Code entry, strict Name validation, error boundaries | **COMPLETED ✅** |
-| **Phase 5** | **Host Arena Engine** | State-driven Lobby, Question, Reveal, Scoreboard, Podium | *PLANNED* |
+| **Phase 5** | **Host Arena Engine** | State-driven Lobby, Question, Reveal, Scoreboard, Podium | **COMPLETED ✅** |
 | **Phase 6** | **Player Mobile Controller** | Minimalist Question view, tap lock, private reveal, rank view | *PLANNED* |
 | **Phase 7** | **Multi-Tab Simulation** | Concurrency verification, tie-break verification, load test | *PLANNED* |
 | **Phase 8** | **Socket.io LAN Engine** | Real local WebSockets, authoritative server clock, LAN setup | *PLANNED* |
@@ -68,13 +68,13 @@
 
 ---
 
-### Phase 5: Host Arena Engine (State-Driven Projector) 📋
-- [ ] **D6 Lobby View**: Giant room code, live connected player count, dynamic participant list, `MULAI GAME` button (disabled if 0 players).
-- [ ] **D7 Question Active**: Massive prompt text, non-skippable absolute countdown timer, throttled answer counter.
-- [ ] **D8 Reveal Stage**: Automatic 3–5s transition, correct option highlight, aggregate option distribution bar chart (A/B/C/D counts).
-- [ ] **D9 Scoreboard**: Top 10 ranking with animated rank delta badges (`↑2 NAIK`), debounced `LANJUT` button with loading state.
-- [ ] **D10 Final Result**: Top 3 Podium (🥇 1st, 🥈 2nd, 🥉 3rd) with graceful degradation if < 3 players, manual "KEMBALI KE LIBRARY" exit.
-- **Verification Gate**: Single-route state machine cycles through all questions without URL reloads.
+### Phase 5: Host Arena Engine (State-Driven Projector) ✅
+- [x] **D6 Lobby View**: Giant room code, live connected player count, dynamic participant list with avatar chips, `MULAI GAME` button (disabled if 0 players, audio trigger, solo bot test button) (`components/host/arena/LobbyView.tsx`).
+- [x] **D7 Question Active**: Massive prompt text, non-skippable absolute countdown timer derived from `questionEndsAtMs`, throttled answer counter, auto-advance when 100% responded (`components/host/arena/QuestionView.tsx`).
+- [x] **D8 Reveal Stage**: Automatic 3–5s transition with visual countdown bar, correct option highlight with bounce checkmark, aggregate option distribution bar chart (A/B/C/D counts and percentages) (`components/host/arena/RevealView.tsx`).
+- [x] **D9 Scoreboard**: Top 10 ranking with animated rank delta badges (`↑2 NAIK`, `↓1 TURUN`, `- TETAP`), debounced `LANJUT` button with loading state (`components/host/arena/ScoreboardView.tsx`).
+- [x] **D10 Final Result**: Top 3 Podium (🥇 1st, 🥈 2nd, 🥉 3rd) with animated heights, graceful degradation if < 3 players, runner-up list, and "KEMBALI KE LIBRARY" exit (`components/host/arena/PodiumView.tsx`).
+- **Verification Gate**: Single-route state machine cycles through all questions without URL reloads. Passed `test:phase5` (8/8 unit assertions passed) and Next.js compiler check.
 
 ---
 
