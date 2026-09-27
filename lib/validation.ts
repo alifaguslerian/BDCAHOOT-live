@@ -107,3 +107,23 @@ export function validateQuiz(quiz: Quiz): QuizValidationResult {
     errors,
   };
 }
+
+/**
+ * Strict Submit Answer Payload Validation (Anti-OOM & Injection Guard):
+ * - playerId must be non-empty string <= 64 chars
+ * - option must be strictly 1 character in ['A', 'B', 'C', 'D']
+ * - Drops oversized payloads (e.g. 50MB injection attack) instantly
+ */
+export function validateSubmitAnswerPayload(
+  playerId: unknown,
+  option: unknown
+): { isValid: boolean; error?: string } {
+  if (typeof playerId !== 'string' || !playerId.trim() || playerId.length > 64) {
+    return { isValid: false, error: 'ID pemain tidak valid (maksimal 64 karakter).' };
+  }
+  if (typeof option !== 'string' || option.length !== 1 || !['A', 'B', 'C', 'D'].includes(option)) {
+    return { isValid: false, error: 'Opsi jawaban tidak valid (harus 1 karakter: A, B, C, atau D).' };
+  }
+  return { isValid: true };
+}
+
