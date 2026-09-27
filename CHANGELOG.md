@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Strict security configuration in `.gitignore` protecting local SQLite databases and environment files.
 
 ### Changed
+- Lighthouse SEO & Performance Hardening:
+  - `app/layout.tsx`: Configured explicit `metadataBase`, canonical URLs (`alternates: { canonical: '/' }`), complete robots meta directives, Schema.org JSON-LD structured data (`WebApplication`), optimized font subsets/weights (`preload: true`), and mobile viewport/theme-color configuration.
+  - `app/robots.ts` & `app/sitemap.ts`: Created dynamic `robots.txt` and `sitemap.xml` endpoints satisfying Lighthouse crawlability criteria.
+  - `app/icon.svg`: Added custom vector favicon preventing 404 resource errors.
+  - `components/host/HostLanding.tsx`: Converted navigation and card actions to crawlable Next.js `<Link>` elements, added accessible ARIA labels, and applied GPU compositing (`transform-gpu will-change-transform`) to ambient radial blur glow.
+  - `metadata.json`: Synced 149-character high-conversion description across metadata files.
 - Core & Phase 3 Reviewer Refinements:
   - `lib/constants.ts` & `PlayerTapPad.tsx`: Verified UTF-8 valid geometric glyphs (`▲`, `◆`, `●`, `■`) and checkmark indicator (`✓`).
   - `context/MockGameContext.tsx`: Added double-click guard (`if (isHostActionLoading) return;`) in `nextQuestion()` and `finishQuiz()`.
