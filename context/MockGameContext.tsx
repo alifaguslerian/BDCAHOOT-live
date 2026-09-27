@@ -4,12 +4,11 @@ import React, { createContext, useContext, useState, useMemo, useRef, useEffect,
 import type { GameStage, GameRoom, Player, GameRoomSettings, PlayerAnswer } from '@/types/game';
 import type { QuizQuestion, OptionId, Quiz } from '@/types/quiz';
 import { calculateQuestionPoints, calculateRankings } from '@/lib/scoring';
-import { validatePlayerName } from '@/lib/validation';
+import { validatePlayerName, validateSubmitAnswerPayload } from '@/lib/validation';
 import {
   REVEAL_DURATION_MS,
   DEFAULT_TIMER_SECONDS,
   ANSWER_GRACE_PERIOD_MS,
-  BATCH_FLUSH_INTERVAL_MS,
   DEFAULT_ROOM_CODE,
   generateRoomCode,
 } from '@/lib/constants';
@@ -80,6 +79,9 @@ interface MockGameContextValue {
   distribution: { A: number; B: number; C: number; D: number };
   rankings: ReturnType<typeof calculateRankings>;
   answeredCount: number;
+  addMockPlayer: (name?: string) => string;
+  kickPlayer: (playerId: string) => void;
+  simulateMockAnswers: () => void;
 }
 
 function createInitialRoom(): GameRoom {
@@ -137,6 +139,7 @@ const MockGameContext = createContext<MockGameContextValue | null>(null);
 export function MockGameProvider({ children }: { children: React.ReactNode }) {
   const [isHostActionLoading, setIsHostActionLoading] = useState(false);
   const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null);
+  const [liveAnsweredCount, setLiveAnsweredCount] = useState<number>(0);
 
   const [room, setRoom] = useState<GameRoom>(createInitialRoom);
 
@@ -144,6 +147,17 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
   const pendingAnswersRef = useRef<Map<string, PendingAnswerRecord>>(new Map());
   const answersStoreRef = useRef<Map<string, Record<number, PlayerAnswer>>>(new Map());
   const penalizedQuestionsRef = useRef<Set<number>>(new Set());
+  const [previousRanks, setPreviousRanks] = useState<Record<string, number>>({});
+
+  // Helper: Snapshot current rankings to compute rank deltas on next scoreboard
+  const snapshotRankings = useCallback((players: Record<string, Player>) => {
+    const currentList = calculateRankings(players);
+    const map: Record<string, number> = {};
+    currentList.forEach((item) => {
+      map[item.playerId] = item.rank;
+    });
+    setPreviousRanks(map);
+  }, []);
 
   // Helper: Apply full response time penalty (T) for players who did not answer the active question
   const applyTieBreakerPenalty = useCallback(
@@ -178,7 +192,7 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
-  // Flush pending answers into the room state in a single atomic batch
+  // Flush pending answers into the room state in a single atomic batch (committed on stage transitions)
   const flushPendingAnswers = useCallback(() => {
     if (pendingAnswersRef.current.size === 0) return;
 
@@ -223,15 +237,6 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  // Periodic batch flush interval (300ms) to throttle React re-render cascades under 50+ concurrent taps
-  useEffect(() => {
-    const interval = setInterval(() => {
-      flushPendingAnswers();
-    }, BATCH_FLUSH_INTERVAL_MS);
-
-    return () => clearInterval(interval);
-  }, [flushPendingAnswers]);
-
   const currentQuestion = useMemo(() => {
     if (room.stage === 'LOBBY' || room.stage === 'FINAL') return null;
     return room.questions[room.currentQuestionIndex] ?? null;
@@ -259,18 +264,21 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
     if (room.stage !== 'SCOREBOARD' && room.stage !== 'FINAL' && room.stage !== 'LOBBY') {
       return [];
     }
-    return calculateRankings(room.players);
-  }, [room.stage, room.players]);
+    return calculateRankings(room.players, previousRanks);
+  }, [room.stage, room.players, previousRanks]);
 
-  // Lightweight answered count for Host Screen during QUESTION stage
+  // Lightweight answered count: uses zero-allocation scalar state during QUESTION stage
   const answeredCount = useMemo(() => {
+    if (room.stage === 'QUESTION') {
+      return liveAnsweredCount;
+    }
     let count = 0;
     const qIdx = room.currentQuestionIndex;
     for (const p of Object.values(room.players)) {
       if (p.answers[qIdx]) count++;
     }
     return count;
-  }, [room.players, room.currentQuestionIndex]);
+  }, [room.stage, liveAnsweredCount, room.players, room.currentQuestionIndex]);
 
   // Fast O(1) query whether a player has answered current question
   const hasPlayerAnswered = useCallback((playerId: string): boolean => {
@@ -309,6 +317,8 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
 
     penalizedQuestionsRef.current.clear();
     flushPendingAnswers();
+    setLiveAnsweredCount(0);
+    snapshotRankings(room.players);
 
     const duration = room.questions[0]?.timerSeconds ?? DEFAULT_TIMER_SECONDS;
     const now = Date.now();
@@ -328,9 +338,13 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
     if (isHostActionLoading) return;
     setIsHostActionLoading(true);
     flushPendingAnswers();
+    setLiveAnsweredCount(0);
 
     setTimeout(() => {
       setRoom((prev) => {
+        // Snapshot current ranks before transitioning
+        snapshotRankings(prev.players);
+
         // Apply full response time penalty for unanswered players if transitioning away
         const currentPlayers = applyTieBreakerPenalty(
           prev.players,
@@ -417,6 +431,8 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
     pendingAnswersRef.current.clear();
     answersStoreRef.current.clear();
     penalizedQuestionsRef.current.clear();
+    setPreviousRanks({});
+    setLiveAnsweredCount(0);
 
     setRoom((prev) => ({
       ...prev,
@@ -427,6 +443,59 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
       players: {},
       updatedAt: Date.now(),
     }));
+  };
+
+  const addMockPlayer = (name?: string): string => {
+    const dummyNames = ['DONI', 'ELENA', 'FAJAR', 'GITA', 'HADI', 'INDAH', 'JOKO', 'KIKI'];
+    const existingNames = new Set(Object.values(room.players).map((p) => p.name));
+    const chosenName = name || dummyNames.find((n) => !existingNames.has(n)) || `PLAYER${Math.floor(Math.random() * 900 + 100)}`;
+    const id = `p-mock-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+    setRoom((prev) => ({
+      ...prev,
+      players: {
+        ...prev.players,
+        [id]: {
+          id,
+          name: chosenName.toUpperCase(),
+          joinedAt: Date.now(),
+          connected: true,
+          score: 0,
+          totalResponseTimeMs: 0,
+          answers: {},
+        },
+      },
+      updatedAt: Date.now(),
+    }));
+    return id;
+  };
+
+  const kickPlayer = (playerId: string) => {
+    setRoom((prev) => {
+      const nextPlayers = { ...prev.players };
+      delete nextPlayers[playerId];
+      return {
+        ...prev,
+        players: nextPlayers,
+        updatedAt: Date.now(),
+      };
+    });
+  };
+
+  const simulateMockAnswers = () => {
+    if (room.stage !== 'QUESTION' || !currentQuestion) return;
+    const options: OptionId[] = ['A', 'B', 'C', 'D'];
+    const qIdx = room.currentQuestionIndex;
+
+    Object.values(room.players).forEach((p) => {
+      if (!p.answers[qIdx] && !pendingAnswersRef.current.has(p.id)) {
+        const isCorrectBias = Math.random() > 0.35;
+        const opt = isCorrectBias
+          ? currentQuestion.correctOption
+          : options[Math.floor(Math.random() * options.length)];
+        submitAnswer(p.id, opt);
+      }
+    });
   };
 
   const createRoomFromQuiz = (quiz: Quiz, customSettings?: Partial<GameRoomSettings>): string => {
@@ -535,12 +604,18 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
 
   // PLAYER ACTION: Submit Answer with anti-cheat deadline & stage validation + batch buffer
   const submitAnswer = (playerId: string, option: OptionId): { success: boolean; error?: string } => {
+    // 0. Strict Payload & Anti-OOM Validation (Guards against oversized payloads and memory exhaustion)
+    const payloadValidation = validateSubmitAnswerPayload(playerId, option);
+    if (!payloadValidation.isValid) {
+      return { success: false, error: payloadValidation.error };
+    }
+
     // 1. Stage verification: ONLY allowed in QUESTION stage
     if (room.stage !== 'QUESTION') {
       return { success: false, error: 'Bukan tahap menjawab (Game stage bukan QUESTION).' };
     }
 
-    // 2. Anti-cheat & Network Late Packet Grace Period verification
+    // 2. Anti-cheat & Network Late Packet Grace Period verification (Server-Authoritative Clock)
     const now = Date.now();
     if (room.questionEndsAtMs && now > room.questionEndsAtMs + ANSWER_GRACE_PERIOD_MS) {
       return { success: false, error: 'Waktu menjawab telah habis (Late packet rejected).' };
@@ -588,8 +663,11 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
     }
     answersStoreRef.current.get(playerId)![qIdx] = answerRecord;
 
-    // Push to batching buffer (flushed every 300ms or immediately on stage change)
+    // Push to in-memory pending buffer (committed atomically on stage transition to REVEAL)
     pendingAnswersRef.current.set(playerId, answerRecord);
+
+    // Atomically increment lightweight scalar counter (avoids deep room state re-render cascade)
+    setLiveAnsweredCount((prev) => prev + 1);
 
     return { success: true };
   };
@@ -615,6 +693,9 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
         distribution,
         rankings,
         answeredCount,
+        addMockPlayer,
+        kickPlayer,
+        simulateMockAnswers,
       }}
     >
       {children}
