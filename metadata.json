@@ -1,6 +1,6 @@
 {
   "name": "BDCAHOOT Live Arena",
-  "description": "Platform kuis panggung live interaktif untuk kompetisi dan presentasi seru.",
+  "description": "Platform kuis panggung live interaktif untuk kompetisi dan presentasi seru. Pimpin kuis multiplayer real-time via smartphone dan proyektor panggung.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
