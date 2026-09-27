@@ -12,7 +12,7 @@
 | **Phase 1** | **Foundations & Invariants** | Types, scoring formulas, tie-breakers, validation, mock store | **COMPLETED ✅** |
 | **Phase 2** | **Design System & UI Tokens** | Typography, Stitch tokens, option badges, arena datasets | **IN PROGRESS ⏳** |
 | **Phase 3** | **Host Quiz Management** | Quiz Library, Quiz Editor, Soal Editor, Game Settings | *PLANNED* |
-| **Phase 4** | **Player Onboarding** | Room Code entry, strict Name validation, error boundaries | *PLANNED* |
+| **Phase 4** | **Player Onboarding** | Room Code entry, strict Name validation, error boundaries | **COMPLETED ✅** |
 | **Phase 5** | **Host Arena Engine** | State-driven Lobby, Question, Reveal, Scoreboard, Podium | *PLANNED* |
 | **Phase 6** | **Player Mobile Controller** | Minimalist Question view, tap lock, private reveal, rank view | *PLANNED* |
 | **Phase 7** | **Multi-Tab Simulation** | Concurrency verification, tie-break verification, load test | *PLANNED* |
@@ -60,11 +60,11 @@
 
 ---
 
-### Phase 4: Player Onboarding (Pre-Game) 📋
-- [ ] **D12 Join Screen**: 6-digit room code input with auto-formatting and auto-uppercase.
-- [ ] **D13 Name Screen**: Single name input, instant validation against regex `^[a-zA-Z]+$`, clear duplicate name rejection.
-- [ ] **Blocked State**: Dedicated handler for participants attempting to join an already started game with navigation back.
-- **Verification Gate**: Disallows invalid characters, spaces, and duplicate names; successfully registers valid player.
+### Phase 4: Player Onboarding (Pre-Game) ✅
+- [x] **D12 Join Screen**: 6-digit room code input with auto-formatting, uppercase enforcement, and live active room detection (`app/player/join/page.tsx`).
+- [x] **D13 Name Screen**: Single name input with real-time regex validation (`^[a-zA-Z]+$`), length boundaries (1-15 chars), and case-insensitive duplicate name rejection (`app/player/name/page.tsx`).
+- [x] **Blocked State**: Dedicated alert view with dynamic stage indicators and navigation back for players attempting to join mid-game (`components/player/BlockedGameState.tsx`).
+- [x] **Verification Gate**: 11/11 automated unit tests passed (`scripts/verify-phase4.mjs`), clean compile and zero linter warnings.
 
 ---
 
