@@ -100,6 +100,60 @@ class SoundEffects {
       // Silent fallback
     }
   }
+
+  playTick(isUrgent = false) {
+    try {
+      const ctx = this.getContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(isUrgent ? 880 : 440, now);
+
+      gain.gain.setValueAtTime(0.05, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.04);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.04);
+    } catch {
+      // Silent fallback
+    }
+  }
+
+  playFanfare() {
+    try {
+      const ctx = this.getContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      // Arpeggio chord: C4, E4, G4, C5
+      const notes = [261.63, 329.63, 392.0, 523.25, 659.25, 783.99];
+      notes.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = 'triangle';
+        const start = now + idx * 0.1;
+        const duration = idx === notes.length - 1 ? 0.6 : 0.2;
+
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0.09, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(start);
+        osc.stop(start + duration);
+      });
+    } catch {
+      // Silent fallback
+    }
+  }
 }
 
 export const sound = new SoundEffects();
