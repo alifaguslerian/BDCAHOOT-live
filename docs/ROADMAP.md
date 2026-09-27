@@ -1,7 +1,7 @@
 # Implementation Roadmap & Milestone Tracker
 
 > Modular 9-Phase Engineering Plan for BDCAHOOT Live Arena. Updated continuously per phase release.
-> **Last Updated**: 2026-09-08 | **Current Phase**: Phase 2 (Design System & UI Atoms)
+> **Last Updated**: 2026-09-27 | **Current Phase**: Phase 5 (Host Arena Engine)
 
 ---
 
@@ -10,8 +10,8 @@
 | Phase | Milestone Name | Focus Area | Status |
 | :---: | :--- | :--- | :---: |
 | **Phase 1** | **Foundations & Invariants** | Types, scoring formulas, tie-breakers, validation, mock store | **COMPLETED ✅** |
-| **Phase 2** | **Design System & UI Tokens** | Typography, Stitch tokens, option badges, arena datasets | **IN PROGRESS ⏳** |
-| **Phase 3** | **Host Quiz Management** | Quiz Library, Quiz Editor, Soal Editor, Game Settings | *PLANNED* |
+| **Phase 2** | **Design System & UI Tokens** | Typography, Stitch tokens, option badges, arena datasets | **COMPLETED ✅** |
+| **Phase 3** | **Host Quiz Management** | Quiz Library, Quiz Editor, Soal Editor, Game Settings | **COMPLETED ✅** |
 | **Phase 4** | **Player Onboarding** | Room Code entry, strict Name validation, error boundaries | **COMPLETED ✅** |
 | **Phase 5** | **Host Arena Engine** | State-driven Lobby, Question, Reveal, Scoreboard, Podium | *PLANNED* |
 | **Phase 6** | **Player Mobile Controller** | Minimalist Question view, tap lock, private reveal, rank view | *PLANNED* |
