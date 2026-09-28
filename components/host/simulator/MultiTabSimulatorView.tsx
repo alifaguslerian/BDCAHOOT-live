@@ -136,13 +136,22 @@ export function MultiTabSimulatorView() {
     const qIdx = room.currentQuestionIndex;
     const correctOpt = currentQuestion.correctOption;
 
-    // All players tap the EXACT same millisecond
+    // All players dispatch real wire packets simultaneously over crossTabBus
     playersList.forEach((player, i) => {
-      const res = submitAnswer(player.id, correctOpt);
+      const now = Date.now();
+      crossTabBus.post({
+        type: 'PLAYER_SUBMIT_ANSWER',
+        roomId: room.code,
+        playerId: player.id,
+        option: correctOpt,
+        questionIndex: qIdx,
+        clientSentAtMs: now,
+        submissionId: `collision-${now}-${player.id}`,
+        timestamp: now,
+        senderTabId: `sim-client-${player.id}`,
+      });
       log.push(
-        `✓ Player #${i + 1} (${player.name}) -> Tap ${correctOpt} -> ${
-          res.success ? 'TERCATAT' : res.error
-        }`
+        `✓ [Bus Packet] sim-client-${player.id} (${player.name}) -> Emitted PLAYER_SUBMIT_ANSWER (${correctOpt})`
       );
     });
 
@@ -160,7 +169,7 @@ export function MultiTabSimulatorView() {
     setCollisionResultLog(log);
     setIsCollisionRunning(false);
     sound.playSuccess();
-  }, [room.stage, room.currentQuestionIndex, room.players, currentQuestion, playersList, submitAnswer]);
+  }, [room.stage, room.code, room.currentQuestionIndex, room.players, currentQuestion, playersList]);
 
   // TEST 2: Mid-Game Reconnection & Page Refresh Simulation
   const runReconnectSimulation = useCallback(() => {
@@ -362,6 +371,22 @@ export function MultiTabSimulatorView() {
             >
               <Cpu className="w-3.5 h-3.5 text-[#C084FC]" />
               <span>🏃 30-Soal Endurance & Leak Audit</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.open(
+                    `/player/join?code=${room.code}`,
+                    '_blank',
+                    'width=430,height=800,menubar=no,toolbar=no'
+                  );
+                }
+              }}
+              className="px-3 py-1.5 rounded-lg bg-[#38BDF8]/20 border border-[#38BDF8] hover:bg-[#38BDF8]/30 text-[#38BDF8] font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span>🚀 Buka Tab Pemain Nyata (Window Pop-Up)</span>
             </button>
           </div>
 
@@ -599,7 +624,18 @@ export function MultiTabSimulatorView() {
                                 key={opt}
                                 type="button"
                                 onClick={() => {
-                                  submitAnswer(player.id, opt);
+                                  const now = Date.now();
+                                  crossTabBus.post({
+                                    type: 'PLAYER_SUBMIT_ANSWER',
+                                    roomId: room.code,
+                                    playerId: player.id,
+                                    option: opt,
+                                    questionIndex: room.currentQuestionIndex,
+                                    clientSentAtMs: now,
+                                    submissionId: `sim-tap-${now}-${player.id}`,
+                                    timestamp: now,
+                                    senderTabId: `sim-client-${player.id}`,
+                                  });
                                   sound.playTap();
                                 }}
                                 className={`h-8 rounded-lg font-bold text-xs flex items-center justify-center gap-1 cursor-pointer transition-transform active:scale-95 ${OPTION_THEMES[opt].bg} text-white`}
