@@ -6,6 +6,7 @@ import type { QuizQuestion, OptionId, Quiz } from '@/types/quiz';
 import { calculateQuestionPoints, calculateRankings } from '@/lib/scoring';
 import { validatePlayerName, validateSubmitAnswerPayload } from '@/lib/validation';
 import { calculateClockOffset } from '@/lib/timeSync';
+import { crossTabBus } from '@/lib/crossTabBus';
 import {
   REVEAL_DURATION_MS,
   DEFAULT_TIMER_SECONDS,
@@ -176,7 +177,19 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
     setServerOffsetMs(sync.serverOffsetMs);
   }, []);
 
-  const [room, setRoom] = useState<GameRoom>(createInitialRoom);
+  const [room, setRoom] = useState<GameRoom>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = crossTabBus.loadRoomSnapshot();
+        if (saved && saved.code) {
+          return saved;
+        }
+      } catch {
+        // fallback to default
+      }
+    }
+    return createInitialRoom();
+  });
 
   // High-performance mutable answer store & batch queue (avoids 270KB deep clone per player tap)
   const pendingAnswersRef = useRef<Map<string, PendingAnswerRecord>>(new Map());
@@ -706,6 +719,84 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
 
     return { success: true };
   };
+
+  // Cross-Tab Bus Integration: Synchronizes 1 Host and multiple Player tabs in real time
+  const isRemoteUpdateRef = useRef(false);
+  const joinRoomRef = useRef(joinRoomAsPlayer);
+  const submitAnswerRef = useRef(submitAnswer);
+  const syncClockRef = useRef(syncServerClock);
+
+  useEffect(() => {
+    joinRoomRef.current = joinRoomAsPlayer;
+    submitAnswerRef.current = submitAnswer;
+    syncClockRef.current = syncServerClock;
+  });
+
+  // Broadcast local room changes and persist room state snapshot
+  useEffect(() => {
+    if (isRemoteUpdateRef.current) {
+      isRemoteUpdateRef.current = false;
+      return;
+    }
+    crossTabBus.saveRoomSnapshot(room);
+    crossTabBus.post({
+      type: 'ROOM_STATE_SYNC',
+      roomId: room.code,
+      room,
+      serverTimestampMs: Date.now(),
+      timestamp: Date.now(),
+    });
+  }, [room]);
+
+  // Subscribe to incoming cross-tab messages
+  useEffect(() => {
+    const unsubscribe = crossTabBus.subscribe((msg) => {
+      if (msg.type === 'ROOM_STATE_SYNC') {
+        if (msg.room && msg.room.updatedAt >= room.updatedAt) {
+          isRemoteUpdateRef.current = true;
+          setRoom(msg.room);
+          if (msg.serverTimestampMs) {
+            syncClockRef.current(msg.serverTimestampMs);
+          }
+        }
+      } else if (msg.type === 'PLAYER_JOIN_REQUEST') {
+        const res = joinRoomRef.current(msg.name);
+        if (res.success && res.playerId) {
+          crossTabBus.post({
+            type: 'PLAYER_JOIN_ACCEPTED',
+            roomId: msg.roomId,
+            requestId: msg.requestId,
+            playerId: res.playerId,
+            timestamp: Date.now(),
+          });
+        } else {
+          crossTabBus.post({
+            type: 'PLAYER_JOIN_REJECTED',
+            roomId: msg.roomId,
+            requestId: msg.requestId,
+            error: res.error || 'Gagal bergabung',
+            timestamp: Date.now(),
+          });
+        }
+      } else if (msg.type === 'PLAYER_SUBMIT_ANSWER') {
+        const res = submitAnswerRef.current(msg.playerId, msg.option);
+        crossTabBus.post({
+          type: 'PLAYER_ANSWER_ACK',
+          roomId: msg.roomId,
+          submissionId: msg.submissionId,
+          playerId: msg.playerId,
+          success: res.success,
+          error: res.error,
+          serverReceivedAtMs: Date.now(),
+          timestamp: Date.now(),
+        });
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [room.updatedAt]);
 
   return (
     <MockGameContext.Provider
