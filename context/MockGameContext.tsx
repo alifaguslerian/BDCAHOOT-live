@@ -647,6 +647,17 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
     }));
 
     setCurrentPlayerId(newPlayerId);
+
+    // Broadcast join request across tabs
+    crossTabBus.post({
+      type: 'PLAYER_JOIN_REQUEST',
+      roomId: room.code,
+      name: validation.sanitizedName.toUpperCase(),
+      playerId: newPlayerId,
+      requestId: `req-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: Date.now(),
+    });
+
     return { success: true, playerId: newPlayerId };
   };
 
@@ -717,18 +728,26 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
     // Atomically increment lightweight scalar counter (avoids deep room state re-render cascade)
     setLiveAnsweredCount((prev) => prev + 1);
 
+    // Broadcast PLAYER_SUBMIT_ANSWER over crossTabBus
+    crossTabBus.post({
+      type: 'PLAYER_SUBMIT_ANSWER',
+      roomId: room.code,
+      playerId,
+      option,
+      questionIndex: qIdx,
+      clientSentAtMs: now,
+      submissionId: `sub-${now}-${playerId}`,
+      timestamp: now,
+    });
+
     return { success: true };
   };
 
   // Cross-Tab Bus Integration: Synchronizes 1 Host and multiple Player tabs in real time
   const isRemoteUpdateRef = useRef(false);
-  const joinRoomRef = useRef(joinRoomAsPlayer);
-  const submitAnswerRef = useRef(submitAnswer);
   const syncClockRef = useRef(syncServerClock);
 
   useEffect(() => {
-    joinRoomRef.current = joinRoomAsPlayer;
-    submitAnswerRef.current = submitAnswer;
     syncClockRef.current = syncServerClock;
   });
 
@@ -760,43 +779,102 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
           }
         }
       } else if (msg.type === 'PLAYER_JOIN_REQUEST') {
-        const res = joinRoomRef.current(msg.name);
-        if (res.success && res.playerId) {
+        setRoom((prev) => {
+          if (msg.playerId && prev.players[msg.playerId]) {
+            return prev;
+          }
+          const existingNames = Object.values(prev.players).map((p) => p.name);
+          const validation = validatePlayerName(msg.name, existingNames);
+          if (!validation.isValid) {
+            crossTabBus.post({
+              type: 'PLAYER_JOIN_REJECTED',
+              roomId: msg.roomId,
+              requestId: msg.requestId,
+              error: validation.error || 'Nama tidak valid',
+              timestamp: Date.now(),
+            });
+            return prev;
+          }
+
+          const pId = msg.playerId || `p-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+          const newPlayer: Player = {
+            id: pId,
+            name: validation.sanitizedName.toUpperCase(),
+            joinedAt: Date.now(),
+            connected: true,
+            score: 0,
+            totalResponseTimeMs: 0,
+            answers: {},
+          };
+
           crossTabBus.post({
             type: 'PLAYER_JOIN_ACCEPTED',
             roomId: msg.roomId,
             requestId: msg.requestId,
-            playerId: res.playerId,
+            playerId: pId,
             timestamp: Date.now(),
           });
-        } else {
-          crossTabBus.post({
-            type: 'PLAYER_JOIN_REJECTED',
-            roomId: msg.roomId,
-            requestId: msg.requestId,
-            error: res.error || 'Gagal bergabung',
-            timestamp: Date.now(),
-          });
-        }
-      } else if (msg.type === 'PLAYER_SUBMIT_ANSWER') {
-        const res = submitAnswerRef.current(msg.playerId, msg.option);
-        crossTabBus.post({
-          type: 'PLAYER_ANSWER_ACK',
-          roomId: msg.roomId,
-          submissionId: msg.submissionId,
-          playerId: msg.playerId,
-          success: res.success,
-          error: res.error,
-          serverReceivedAtMs: Date.now(),
-          timestamp: Date.now(),
+
+          return {
+            ...prev,
+            players: {
+              ...prev.players,
+              [pId]: newPlayer,
+            },
+            updatedAt: Date.now(),
+          };
         });
+      } else if (msg.type === 'PLAYER_SUBMIT_ANSWER') {
+        const qIdx = msg.questionIndex ?? room.currentQuestionIndex;
+        if (room.stage === 'QUESTION' && !pendingAnswersRef.current.has(msg.playerId)) {
+          const now = Date.now();
+          const startTime = room.questionStartedAtMs ?? now;
+          const duration = Math.max(0, now - startTime);
+          const currentQ = room.questions[qIdx];
+          if (currentQ) {
+            const isCorrect = msg.option === currentQ.correctOption;
+            const { points, speedBonus } = calculateQuestionPoints(
+              isCorrect,
+              duration,
+              currentQ.timerSeconds
+            );
+
+            const answerRecord: PendingAnswerRecord = {
+              playerId: msg.playerId,
+              questionIndex: qIdx,
+              selectedOption: msg.option,
+              serverReceivedAtMs: now,
+              responseDurationMs: duration,
+              isCorrect,
+              speedBonus,
+              pointsEarned: points,
+            };
+
+            if (!answersStoreRef.current.has(msg.playerId)) {
+              answersStoreRef.current.set(msg.playerId, {});
+            }
+            answersStoreRef.current.get(msg.playerId)![qIdx] = answerRecord;
+            pendingAnswersRef.current.set(msg.playerId, answerRecord);
+            setLiveAnsweredCount((prev) => prev + 1);
+
+            crossTabBus.post({
+              type: 'PLAYER_ANSWER_ACK',
+              roomId: msg.roomId,
+              submissionId: msg.submissionId,
+              playerId: msg.playerId,
+              success: true,
+              serverReceivedAtMs: now,
+              timestamp: now,
+            });
+          }
+        }
       }
     });
 
     return () => {
       unsubscribe();
     };
-  }, [room.updatedAt]);
+  }, [room.updatedAt, room.stage, room.currentQuestionIndex, room.questions, room.questionStartedAtMs]);
 
   return (
     <MockGameContext.Provider
