@@ -12,7 +12,9 @@
     "test:phase4": "node scripts/verify-phase4.mjs",
     "test:phase5": "node scripts/verify-phase5.mjs",
     "test:phase6": "node scripts/verify-phase6.mjs",
+    "test:phase7": "node scripts/verify-phase7.mjs",
     "test:perf": "node scripts/verify-stress-performance.mjs",
+    "test:all": "node scripts/verify-phase5.mjs && node scripts/verify-phase6.mjs && node scripts/verify-phase7.mjs && node scripts/verify-stress-performance.mjs",
     "clean": "next clean"
   },
   "dependencies": {
