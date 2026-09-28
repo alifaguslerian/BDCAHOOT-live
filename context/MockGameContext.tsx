@@ -5,6 +5,7 @@ import type { GameStage, GameRoom, Player, GameRoomSettings, PlayerAnswer } from
 import type { QuizQuestion, OptionId, Quiz } from '@/types/quiz';
 import { calculateQuestionPoints, calculateRankings } from '@/lib/scoring';
 import { validatePlayerName, validateSubmitAnswerPayload } from '@/lib/validation';
+import { calculateClockOffset } from '@/lib/timeSync';
 import {
   REVEAL_DURATION_MS,
   DEFAULT_TIMER_SECONDS,
@@ -74,6 +75,9 @@ interface MockGameContextValue {
   submitAnswer: (playerId: string, option: OptionId) => { success: boolean; error?: string };
   hasPlayerAnswered: (playerId: string) => boolean;
   getPlayerAnswer: (playerId: string, questionIndex?: number) => PlayerAnswer | null;
+  // Time Synchronization
+  serverOffsetMs: number;
+  syncServerClock: (serverTimestampMs: number) => void;
   // Helpers
   currentQuestion: QuizQuestion | null;
   distribution: { A: number; B: number; C: number; D: number };
@@ -138,8 +142,39 @@ const MockGameContext = createContext<MockGameContextValue | null>(null);
 
 export function MockGameProvider({ children }: { children: React.ReactNode }) {
   const [isHostActionLoading, setIsHostActionLoading] = useState(false);
-  const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null);
+  const [currentPlayerId, setCurrentPlayerIdState] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return sessionStorage.getItem('bdcahoot_player_id');
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  const setCurrentPlayerId = useCallback((id: string | null) => {
+    setCurrentPlayerIdState(id);
+    if (typeof window !== 'undefined') {
+      try {
+        if (id) {
+          sessionStorage.setItem('bdcahoot_player_id', id);
+        } else {
+          sessionStorage.removeItem('bdcahoot_player_id');
+        }
+      } catch {
+        // ignore storage errors
+      }
+    }
+  }, []);
+
   const [liveAnsweredCount, setLiveAnsweredCount] = useState<number>(0);
+  const [serverOffsetMs, setServerOffsetMs] = useState<number>(0);
+
+  const syncServerClock = useCallback((serverTimestampMs: number) => {
+    const sync = calculateClockOffset(Date.now(), serverTimestampMs, Date.now());
+    setServerOffsetMs(sync.serverOffsetMs);
+  }, []);
 
   const [room, setRoom] = useState<GameRoom>(createInitialRoom);
 
@@ -689,6 +724,8 @@ export function MockGameProvider({ children }: { children: React.ReactNode }) {
         submitAnswer,
         hasPlayerAnswered,
         getPlayerAnswer,
+        serverOffsetMs,
+        syncServerClock,
         currentQuestion,
         distribution,
         rankings,
