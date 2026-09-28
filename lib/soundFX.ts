@@ -157,3 +157,16 @@ class SoundEffects {
 }
 
 export const sound = new SoundEffects();
+
+/**
+ * Trigger subtle device vibration on mobile browsers if supported.
+ */
+export function triggerHaptic(pattern: number | number[] = 20) {
+  if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+    try {
+      navigator.vibrate(pattern);
+    } catch {
+      // Ignore vibration errors if not supported or disallowed
+    }
+  }
+}
