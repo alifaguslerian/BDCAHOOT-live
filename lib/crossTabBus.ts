@@ -1,15 +1,25 @@
 /**
  * Cross-Tab Communication Bus (BroadcastChannel & LocalStorage Fallback)
- * Enables seamless multi-tab coordination between 1 Host tab and multiple Player tabs
- * on the same local browser without external network dependencies.
+ * Enables true multi-tab synchronization between 1 Host tab and multiple independent Player tabs
+ * without external network or server dependencies.
  */
 
-import type { GameRoom, GameStage, PlayerAnswer } from '@/types/game';
+import type { GameRoom } from '@/types/game';
 import type { OptionId } from '@/types/quiz';
 
 export const CROSS_TAB_CHANNEL_NAME = 'bdcahoot_arena_bus';
 export const STORAGE_ROOM_SNAPSHOT_KEY = 'bdcahoot_room_snapshot';
 export const STORAGE_PLAYER_SESSION_KEY = 'bdcahoot_player_id';
+
+let localTabId: string | null = null;
+
+export function getCurrentTabId(): string {
+  if (typeof window === 'undefined') return 'server-tab';
+  if (!localTabId) {
+    localTabId = 'tab-' + Math.random().toString(36).substring(2, 9);
+  }
+  return localTabId;
+}
 
 export type CrossTabMessageType =
   | 'ROOM_STATE_SYNC'
@@ -25,6 +35,7 @@ export interface BaseCrossTabMessage {
   type: CrossTabMessageType;
   timestamp: number;
   roomId: string;
+  senderTabId?: string;
 }
 
 export interface RoomStateSyncMessage extends BaseCrossTabMessage {
@@ -37,6 +48,7 @@ export interface PlayerJoinRequestMessage extends BaseCrossTabMessage {
   type: 'PLAYER_JOIN_REQUEST';
   name: string;
   requestId: string;
+  playerId?: string;
 }
 
 export interface PlayerJoinAcceptedMessage extends BaseCrossTabMessage {
@@ -129,6 +141,10 @@ class CrossTabBus {
   };
 
   private notifyListeners(msg: CrossTabMessage) {
+    // Drop self-echoed messages
+    if (msg.senderTabId && msg.senderTabId === getCurrentTabId()) {
+      return;
+    }
     this.listeners.forEach((handler) => {
       try {
         handler(msg);
@@ -146,12 +162,17 @@ class CrossTabBus {
   }
 
   public post(msg: CrossTabMessage): void {
+    const fullMsg: CrossTabMessage = {
+      ...msg,
+      senderTabId: msg.senderTabId || getCurrentTabId(),
+    };
+
     if (this.channel) {
-      this.channel.postMessage(msg);
+      this.channel.postMessage(fullMsg);
     } else if (typeof window !== 'undefined') {
       try {
         // Trigger storage event across other tabs
-        window.localStorage.setItem('bdcahoot_cross_tab_event', JSON.stringify(msg));
+        window.localStorage.setItem('bdcahoot_cross_tab_event', JSON.stringify(fullMsg));
       } catch {
         // ignore
       }
