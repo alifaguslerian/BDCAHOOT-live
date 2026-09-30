@@ -3,13 +3,13 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { HostQuizManagement, QuizItem } from '@/components/host/HostQuizManagement';
-import { useMockGame } from '@/context/MockGameContext';
+import { useGame } from '@/context/GameContext';
 import { Quiz, OptionId } from '@/types/quiz';
 import { saveQuiz } from '@/lib/quizStore';
 
 export default function HostManagePage() {
   const router = useRouter();
-  const { createRoomFromQuiz } = useMockGame();
+  const { createRoomFromQuiz } = useGame();
 
   const handleBackToLanding = () => {
     router.push('/');
@@ -43,14 +43,7 @@ export default function HostManagePage() {
     // Persist to store so it is recognized across the app
     saveQuiz(quizToSave);
 
-    // Initialize room in engine
-    const sanitizedCode = settings.roomCode.replace(/\s+/g, '').toUpperCase();
-    const roomCode = createRoomFromQuiz(quizToSave, {
-      shuffleQuestions: settings.shuffle,
-      customRoomCode: sanitizedCode,
-    });
-
-    router.push(`/host/room/${roomCode}`);
+    router.push(`/host/quiz/${quizToSave.id}/settings`);
   };
 
   return (
