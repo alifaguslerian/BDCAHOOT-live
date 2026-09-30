@@ -17,7 +17,7 @@ import {
 import { Quiz } from '@/types/quiz';
 import { getQuizById } from '@/lib/quizStore';
 import { validateQuiz } from '@/lib/validation';
-import { useMockGame } from '@/context/MockGameContext';
+import { useGame } from '@/context/GameContext';
 import { sound } from '@/lib/soundFX';
 import { generateRoomCode } from '@/lib/constants';
 
@@ -27,14 +27,26 @@ interface GameSettingsViewProps {
 
 export function GameSettingsView({ quizId }: GameSettingsViewProps) {
   const router = useRouter();
-  const { createRoomFromQuiz } = useMockGame();
-  const [quiz] = useState<Quiz | null>(() => getQuizById(quizId));
+  const { createRoomFromQuiz } = useGame();
+  const [quiz, setQuiz] = useState<Quiz | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   // Settings State
   const [shuffleQuestions, setShuffleQuestions] = useState(false);
   const [revealDurationSec, setRevealDurationSec] = useState<3 | 4 | 5>(4);
-  const [previewRoomCode] = useState(() => generateRoomCode());
+  const [previewRoomCode, setPreviewRoomCode] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [hostKey, setHostKey] = useState('');
+
+  useEffect(() => {
+    // Browser storage and the random preview must not participate in SSR hydration.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setQuiz(getQuizById(quizId));
+    setPreviewRoomCode(generateRoomCode());
+    setLoaded(true);
+  }, [quizId]);
+
+  if (!loaded) return <div className="min-h-screen bg-[#0b0e14] text-white p-12 text-center">Memuat kuis…</div>;
 
   if (!quiz) {
     return (
@@ -58,7 +70,7 @@ export function GameSettingsView({ quizId }: GameSettingsViewProps) {
   const totalDurationSec = quiz.questions.reduce((acc, q) => acc + (q.timerSeconds || 20), 0);
   const isPlayable = validation.isValid && totalQuestions > 0;
 
-  const handleLaunchRoom = () => {
+  const handleLaunchRoom = async () => {
     if (!isPlayable) {
       sound.playError();
       return;
@@ -66,19 +78,19 @@ export function GameSettingsView({ quizId }: GameSettingsViewProps) {
     sound.playSuccess();
     setIsCreating(true);
 
-    const roomCode = createRoomFromQuiz(quiz, {
+    const roomCode = await createRoomFromQuiz(quiz, {
       shuffleQuestions,
       revealDurationMs: revealDurationSec * 1000,
       customRoomCode: previewRoomCode,
-    });
+    }, hostKey);
 
-    setTimeout(() => {
-      router.push(`/host/room/${roomCode}`);
-    }, 300);
+    setIsCreating(false);
+    if (roomCode) router.push(`/host/room/${roomCode}`);
   };
 
   return (
     <div className="min-h-screen bg-[#0b0e14] text-[#e1e2eb] selection:bg-[#f5a623] selection:text-[#452b00] flex flex-col">
+<label className="p-4 text-sm">Kode operator dari terminal server<input aria-label="Kode operator" type="password" value={hostKey} onChange={e => setHostKey(e.target.value)} className="ml-3 bg-[#151a22] border border-[#272a31] rounded p-2" /></label>
       {/* Top Navbar */}
       <header className="h-16 w-full px-6 lg:px-12 bg-[#0b0e14]/90 backdrop-blur-md border-b border-[#1d2026] flex items-center justify-between sticky top-0 z-30">
         <div className="flex items-center gap-4">

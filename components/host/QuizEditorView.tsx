@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -17,7 +17,7 @@ import {
   Check,
 } from 'lucide-react';
 import { Quiz, OptionId, QuizQuestion } from '@/types/quiz';
-import { getQuizById, saveQuiz, createNewQuestion, createNewDraftQuiz } from '@/lib/quizStore';
+import { getQuizById, saveQuiz, createNewQuestion } from '@/lib/quizStore';
 import { validateQuiz } from '@/lib/validation';
 import { OPTION_CONFIGS, TIMER_PRESETS } from '@/lib/constants';
 import { sound } from '@/lib/soundFX';
@@ -28,22 +28,26 @@ interface QuizEditorViewProps {
 
 export function QuizEditorView({ quizId }: QuizEditorViewProps) {
   const router = useRouter();
-  const [quiz, setQuiz] = useState<Quiz>(() => {
-    const loaded = getQuizById(quizId);
-    if (loaded) return loaded;
-    const draft = createNewDraftQuiz();
-    draft.id = quizId;
-    saveQuiz(draft);
-    return draft;
-  });
+  const [quiz, setQuiz] = useState<Quiz | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving'>('saved');
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => {
+    // Local drafts exist only in the browser; never create or save them during SSR.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setQuiz(getQuizById(quizId));
+    setLoaded(true);
+    return () => clearTimeout(saveTimer.current);
+  }, [quizId]);
 
   // Persist helper
   const triggerAutoSave = useCallback((updated: Quiz) => {
     setSaveStatus('saving');
     saveQuiz(updated);
-    setTimeout(() => {
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
       setSaveStatus('saved');
     }, 400);
   }, []);
@@ -51,7 +55,7 @@ export function QuizEditorView({ quizId }: QuizEditorViewProps) {
   if (!quiz) {
     return (
       <div className="min-h-screen bg-[#0b0e14] text-[#e1e2eb] flex items-center justify-center font-space">
-        Memuat editor kuis...
+        {loaded ? <Link href="/host/library">Kuis tidak ditemukan. Kembali ke Library</Link> : 'Memuat editor kuis...'}
       </div>
     );
   }

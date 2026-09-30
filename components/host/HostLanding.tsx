@@ -63,13 +63,6 @@ export const HostLanding: React.FC<HostLandingProps> = ({ onStartHost, onEnterPl
               Player Join
             </Link>
             <Link
-              href="/host/simulator"
-              className="text-[#85E28A] hover:text-emerald-300 font-bold transition-colors flex items-center gap-1.5"
-            >
-              <span className="w-2 h-2 rounded-full bg-[#10B981]" />
-              <span>Simulator</span>
-            </Link>
-            <Link
               href="/host/library"
               className="text-[#d7c3ae] hover:text-[#e1e2eb] transition-colors"
             >
