@@ -4,7 +4,7 @@
  */
 
 import { Quiz, QuizQuestion } from '@/types/quiz';
-import { MOCK_DEFAULT_QUESTIONS } from '@/context/MockGameContext';
+import { DEFAULT_QUESTIONS } from '@/data/defaultQuestions';
 
 const STORAGE_KEY = 'bdcahoot_quiz_library_v1';
 
@@ -12,7 +12,7 @@ export const PRESEEDED_QUIZZES: Quiz[] = [
   {
     id: 'championship-2026',
     title: 'BDCAHOOT Championship 2026',
-    questions: MOCK_DEFAULT_QUESTIONS,
+    questions: DEFAULT_QUESTIONS,
     createdAt: 1772840000000 - 86400000 * 3,
     updatedAt: 1772840000000 - 86400000,
   },

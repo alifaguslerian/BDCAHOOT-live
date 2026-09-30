@@ -71,7 +71,7 @@ export function calculateRankings(
     }
 
     // 3. Player ID / sequence ASC
-    return a.id.localeCompare(b.id);
+    return (a.joinSequence ?? 0) - (b.joinSequence ?? 0) || a.id.localeCompare(b.id);
   });
 
   return playerList.map((player, index) => {
