@@ -1,117 +1,32 @@
-# Implementation Roadmap & Milestone Tracker
+# Status implementasi BDCAHOOT Live
 
-> Modular 9-Phase Engineering Plan for BDCAHOOT Live Arena. Updated continuously per phase release.
-> **Last Updated**: 2026-09-28 | **Current Phase**: Phase 8 (Socket.io LAN Engine)
+Diperbarui 29 September 2026.
 
----
+Fase 1–7 menghasilkan UI dan prototipe antar-tab. MockGameContext, BroadcastChannel,
+grid simulator, dan skrip tes yang menyalin logika aplikasi sudah diganti.
+Angka benchmark dan klaim "zero memory leaks" dari prototipe bukan bukti untuk engine LAN.
 
-## Progress Overview
+## Fase 8 — engine LAN
 
-| Phase | Milestone Name | Focus Area | Status |
-| :---: | :--- | :--- | :---: |
-| **Phase 1** | **Foundations & Invariants** | Types, scoring formulas, tie-breakers, validation, mock store | **COMPLETED ✅** |
-| **Phase 2** | **Design System & UI Tokens** | Typography, Stitch tokens, option badges, arena datasets | **COMPLETED ✅** |
-| **Phase 3** | **Host Quiz Management** | Quiz Library, Quiz Editor, Soal Editor, Game Settings | **COMPLETED ✅** |
-| **Phase 4** | **Player Onboarding** | Room Code entry, strict Name validation, error boundaries | **COMPLETED ✅** |
-| **Phase 5** | **Host Arena Engine** | State-driven Lobby, Question, Reveal, Scoreboard, Podium | **COMPLETED ✅** |
-| **Phase 6** | **Player Mobile Controller** | Minimalist Question view, tap lock, private reveal, rank view | **COMPLETED ✅** |
-| **Phase 7** | **Multi-Tab Simulation** | Concurrency verification, tie-break verification, load test | **COMPLETED ✅** |
-| **Phase 8** | **Socket.io LAN Engine** | Real local WebSockets, authoritative server clock, LAN setup | *PLANNED* |
-| **Phase 9** | **SQLite Persistence & Hardening** | Local DB persistence, crash recovery, auto-cleanup | *PLANNED* |
+Sudah diimplementasikan:
+- Next.js dan Socket.io dalam satu proses Node dan satu port.
+- Otorisasi Host, identitas pemain, validasi paket, batas request dan ukuran kuis.
+- Deadline dan skor dihitung server; kunci jawaban tidak dikirim sebelum reveal.
+- Retry jawaban idempoten, pemulihan sesi dan pilihan setelah refresh/reconnect.
+- Scoreboard setiap soal, urutan tie-break deterministik, podium akhir.
+- Pembersihan room kedaluwarsa dan pembatasan resource.
+- Tes engine produksi serta 100 koneksi Socket.io × 40 soal.
 
----
+Gerbang penerimaan lapangan belum selesai: uji 50–100 HP pada access point lokasi,
+termasuk layar terkunci, pindah aplikasi, reconnect, dan sesi 30+ soal tanpa Internet.
+Tes transport lokal menggunakan clock soal dipercepat; hasilnya bukan pengukuran
+rendering 100 HP, interferensi Wi-Fi, atau jaminan bebas kebocoran memori.
 
-## Phase Details & Verification Gates
+## Fase berikutnya — pemulihan setelah proses mati
 
-### Phase 1: Foundations & Invariants ✅
-- [x] Type definitions for Quiz, Question, Room, and Player (`types/quiz.ts`, `types/game.ts`).
-- [x] Locked exponential speed bonus mathematical model (`lib/scoring.ts`).
-- [x] Deterministic 3-tier tie-breaking hierarchy (`lib/scoring.ts`).
-- [x] Strict name sanitizer: alphabets A-Z only, case-insensitive uniqueness (`lib/validation.ts`).
-- [x] Mock Game State Store with full stage progression (`context/MockGameContext.tsx`).
-- [x] Strict Git & Security config (`.gitignore` and `.env.example`).
-- [x] Production build verification via Next.js compiler (`compile_applet`).
-- **Gate Passed**: `compile_applet` passed with zero errors, React 19 hooks purity verified.
+State pertandingan masih di memori. Refresh browser dapat pulih; restart server
+menghapus room. Penyimpanan snapshot pertandingan belum diimplementasikan.
+Editor menyimpan kuis di localStorage browser Host.
 
----
-
-### Phase 2: Design System & UI Atoms (Stitch Integration) ✅
-- [x] Google Fonts integration (`Anybody` 700/800/900 + `Space Grotesk` 400/500/600/700).
-- [x] Color theme definitions in `app/globals.css` with `.tabular-nums` numeric alignment.
-- [x] Standardized Arena Mock Dataset (`data/arenaData.ts` with canonical types, lobby, top 7, podium).
-- [x] Accessible option badges with color + geometric shapes (`components/common/OptionBadge.tsx`).
-- [x] Option Button Atoms (`components/common/OptionButton.tsx` with geometric shapes ▲, ◆, ●, ■, WCAG AA contrast, reveal animations, and vote distribution bar charts).
-- [x] Host Projector Header & Timer display atom (`components/common/ProjectorHeader.tsx` with giant tabular timer, urgent urgency pulses, live answered count, and room PIN badge).
-- [x] Player Tap Pad component (`components/common/PlayerTapPad.tsx` with 96px+ touch targets exceeding 44px WCAG, optimistic lock visual feedback, Web Audio tap triggers, and keyboard shortcuts 1/2/3/4 or A/B/C/D).
-- **Verification Gate**: Linter clean (0 errors), color contrast ratio verified for all four options (>4.5:1), Next.js compiler clean build.
-
----
-
-### Phase 3: Host Quiz Management (Pre-Game) & High-Concurrency Performance Hardening ✅
-- [x] **D1 Landing Page**: High-contrast Hero with dual CTAs (`START (HOST)` and `MASUK (PESERTA)`), integrated PIN modal and Web Audio feedback (`HostLanding.tsx`).
-- [x] **D2 Quiz Library**: Persistent stored quiz list, draft vs siap badges, duration metrics, incomplete question indicator, `MAIN` disabled guard (`app/host/library/page.tsx`).
-- [x] **D3 Quiz Editor**: Question reordering (Up/Down), add/delete questions with 1-question minimum guard, autosave status indicator (`components/host/QuizEditorView.tsx`).
-- [x] **D4 Soal Editor**: Question text, 4 options (▲, ◆, ●, ■), radio-button single correct selection, timer presets (10s/15s/20s/30s) (`components/host/QuizEditorView.tsx`).
-- [x] **D5 Game Settings**: Quiz summary, question shuffle toggle, reveal duration presets, dynamic room PIN generation (`generateRoomCode()`) (`components/host/GameSettingsView.tsx`).
-- [x] **High-Concurrency Batching Buffer**: 300ms throttled flush queue for `submitAnswer()` preventing React re-render cascade under 55+ simultaneous player taps.
-- [x] **Anti-Cheat Deadline & Stage Guards**: Rejection of late packets outside the `+200ms` network grace buffer and out-of-turn submissions outside `QUESTION` stage.
-- [x] **Lazy Compute Optimization**: Answer distribution & rankings calculations deferred to `REVEAL` / `SCOREBOARD` phases (zero overhead during question timer).
-- **Verification Gate**: Passed `test:phase3` (8/8 unit assertions passed), `test:perf` (7/7 stress assertions passed, 1,650 answers processed in ~1.05ms), and `compile_applet` (100% clean build).
-
----
-
-### Phase 4: Player Onboarding (Pre-Game) ✅
-- [x] **D12 Join Screen**: 6-digit room code input with auto-formatting, uppercase enforcement, and live active room detection (`app/player/join/page.tsx`).
-- [x] **D13 Name Screen**: Single name input with real-time regex validation (`^[a-zA-Z]+$`), length boundaries (1-15 chars), and case-insensitive duplicate name rejection (`app/player/name/page.tsx`).
-- [x] **Blocked State**: Dedicated alert view with dynamic stage indicators and navigation back for players attempting to join mid-game (`components/player/BlockedGameState.tsx`).
-- [x] **Verification Gate**: 11/11 automated unit tests passed (`scripts/verify-phase4.mjs`), clean compile and zero linter warnings.
-
----
-
-### Phase 5: Host Arena Engine (State-Driven Projector) ✅
-- [x] **D6 Lobby View**: Giant room code, live connected player count, dynamic participant list with avatar chips, `MULAI GAME` button (disabled if 0 players, audio trigger, solo bot test button) (`components/host/arena/LobbyView.tsx`).
-- [x] **D7 Question Active**: Massive prompt text, non-skippable absolute countdown timer derived from `questionEndsAtMs`, throttled answer counter, auto-advance when 100% responded (`components/host/arena/QuestionView.tsx`).
-- [x] **D8 Reveal Stage**: Automatic 3–5s transition with visual countdown bar, correct option highlight with bounce checkmark, aggregate option distribution bar chart (A/B/C/D counts and percentages) (`components/host/arena/RevealView.tsx`).
-- [x] **D9 Scoreboard**: Top 10 ranking with animated rank delta badges (`↑2 NAIK`, `↓1 TURUN`, `- TETAP`), debounced `LANJUT` button with loading state (`components/host/arena/ScoreboardView.tsx`).
-- [x] **D10 Final Result**: Top 3 Podium (🥇 1st, 🥈 2nd, 🥉 3rd) with animated heights, graceful degradation if < 3 players, runner-up list, and "KEMBALI KE LIBRARY" exit (`components/host/arena/PodiumView.tsx`).
-- **Verification Gate**: Single-route state machine cycles through all questions without URL reloads. Passed `test:phase5` (8/8 unit assertions passed) and Next.js compiler check.
-
----
-
-### Phase 6: Player Mobile Controller (State-Driven Client) ✅
-- [x] **D14 Mobile Lobby**: Low-power battery-saving OLED waiting view with breathing connection halo, player avatar badge, sound mute switch, and room PIN indicator (`components/player/controller/PlayerLobbyView.tsx`).
-- [x] **D15 Active Question**: 4 massive geometric tap cards (▲ Ruby Red, ◆ Cobalt Blue, ● Goldenrod Amber, ■ Emerald Green), accordion question text preview, server-synchronized countdown timer, tactile haptics, and optimistic 0ms touch feedback (`components/player/controller/PlayerQuestionView.tsx`).
-- [x] **D16 Answer Locked**: Status confirmation ("✓ Jawaban Tersimpan"), non-selected options dimmed (25% opacity), selected option illuminated with neon ring, silent duplicate tap drop, strict payload anti-OOM validation.
-- [x] **D17 Player Reveal**: Strictly private result card (Correct 🎉 / Incorrect ❌ / Timed Out ⏳), points earned breakdown (+1000 base + speed bonus), correct answer reveal, zero peer data leakage (`components/player/controller/PlayerRevealView.tsx`).
-- [x] **D18 Personal Rank**: Private standing card (`#X dari N pemain`), dynamic animated rank delta badge (`↑ NAIK`, `↓ TURUN`, `- TETAP`), leader comparison gap, questions answered summary (`components/player/controller/PlayerScoreboardView.tsx`).
-- [x] **D19 Player Final**: Game over closure card (`GAME SELESAI`), Podium crown/trophy/medal badge, Web Audio fanfare chime, performance metrics (accuracy % and average response speed), "Main Game Baru" loop (`components/player/controller/PlayerFinalView.tsx`).
-- **Verification Gate**: Passed `test:phase6` (8/8 unit assertions passed), passed `test:perf` (100 players x 30 questions in 2.35ms), `lint_applet` clean, and Next.js compiler `compile_applet` succeeded.
-
----
-
-### Phase 7: Multi-Tab Local Simulation & Stress Testing ✅
-- [x] **Cross-Tab Real-Time Event Bus (`lib/crossTabBus.ts`)**: BroadcastChannel API with localStorage fallback for multi-tab coordination without external network dependencies.
-- [x] **Multi-Tab Live Sync in `MockGameContext`**: Authoritative Host broadcasts state transitions, processes remote player answers, and prevents circular broadcast echoes.
-- [x] **10-Player Virtual Device Grid (`/host/simulator`)**: Interactive simulator rendering live host projector alongside 10 mobile smartphone controller cards with live tap inputs.
-- [x] **Simultaneous Tap Collision Test**: Proven millisecond tie-breaker precision resolving 10 concurrent taps at the exact same timestamp with deterministic ranking.
-- [x] **Reconnection Resilience**: Mid-game F5 page refresh on Host and Player restores full room state, timer, and locked answers without desynchronization.
-- [x] **Memory Leak & Listener Audit**: 30-question endurance loop verifies 0 memory leaks and zero event listener accumulation.
-- **Verification Gate**: Passed `test:phase7` (5/5 unit assertions passed), all 10 devices 100% in stage sync, Next.js production build succeeded.
-
----
-
-### Phase 8: Socket.io LAN Engine (Local Network WebSocket) 📋
-- [ ] Standalone local Node.js WebSocket server script.
-- [ ] WebSocket client hook replacing `MockGameContext`.
-- [ ] Local IP address discovery helper (e.g. `192.168.1.50:3000`) for player QR code / URL display.
-- [ ] Disconnection / Reconnection session token arbitration.
-- **Verification Gate**: Functional quiz game playable across two separate physical devices on the same Wi-Fi with internet unplugged.
-
----
-
-### Phase 9: SQLite Local Persistence & Hardening 📋
-- [ ] SQLite database setup (`better-sqlite3` or embedded driver).
-- [ ] Quiz library CRUD persistence (drafts survive laptop restart).
-- [ ] Game session snapshotting for instant recovery after accidental process termination.
-- [ ] Room cleanup cron for stale abandoned rooms.
-- **Verification Gate**: Laptop restart test: relaunch app and successfully recover stored quiz drafts.
+Lihat README.md untuk menjalankan server dan batas operasional, SECURITY.md untuk
+batas keamanan, serta tests/ untuk pemeriksaan yang dapat dijalankan ulang.
