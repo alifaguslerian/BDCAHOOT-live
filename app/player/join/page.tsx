@@ -6,7 +6,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowRight, Smartphone, ArrowLeft, AlertCircle } from 'lucide-react';
 import { useGame } from '@/context/GameContext';
 import { sound } from '@/lib/soundFX';
-import { BlockedGameState } from '@/components/player/BlockedGameState';
 
 function PlayerJoinContent() {
   const router = useRouter();
@@ -15,7 +14,6 @@ function PlayerJoinContent() {
 
   const [code, setCode] = useState(() => (searchParams?.get('code') || '').toUpperCase().slice(0, 6));
   const [error, setError] = useState<string | null>(null);
-  const [isBlocked, setIsBlocked] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,7 +31,6 @@ function PlayerJoinContent() {
 
     sound.playSuccess();
     setError(null);
-    setIsBlocked(false);
     router.push(`/player/name?room=${clean}`);
   };
 
@@ -79,7 +76,6 @@ function PlayerJoinContent() {
               const sanitized = e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6);
               setCode(sanitized);
               setError(null);
-              setIsBlocked(false);
             }}
             placeholder="BDA729"
             maxLength={6}
