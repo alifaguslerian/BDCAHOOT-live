@@ -4,16 +4,39 @@
  * and zero external asset dependencies (synthesizes subtle clicks/tones).
  */
 
-class SoundEffects {
+export class SoundEffects {
   private ctx: AudioContext | null = null;
+  private output: GainNode | null = null;
+  private muted = false;
+  private listeners = new Set<() => void>();
+
+  isMuted = (): boolean => {
+    if (typeof window === 'undefined') return false;
+    try { this.muted = window.sessionStorage.getItem('bdcahoot_muted') === 'true'; } catch { /* Keep the in-memory setting when storage is unavailable. */ }
+    return this.muted;
+  };
+
+  subscribe = (listener: () => void) => {
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
+  };
+
+  setMuted(value: boolean) {
+    this.muted = value;
+    try { window.sessionStorage.setItem('bdcahoot_muted', String(value)); } catch { /* Storage is optional. */ }
+    if (this.output && this.ctx) this.output.gain.setValueAtTime(value ? 0 : 1, this.ctx.currentTime);
+    this.listeners.forEach(listener => listener());
+  }
 
   private getContext(): AudioContext | null {
-    if (typeof window === 'undefined') return null;
+    if (typeof window === 'undefined' || this.isMuted()) return null;
     try {
       if (!this.ctx) {
         const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
         if (AudioCtx) {
           this.ctx = new AudioCtx();
+          this.output = this.ctx.createGain();
+          this.output.connect(this.ctx.destination);
         }
       }
       if (this.ctx && this.ctx.state === 'suspended') {
@@ -39,8 +62,9 @@ class SoundEffects {
       gain.gain.setValueAtTime(0.08, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
 
+      osc.onended = () => { osc.disconnect(); gain.disconnect(); };
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.output!);
 
       osc.start();
       osc.stop(ctx.currentTime + 0.05);
@@ -65,8 +89,9 @@ class SoundEffects {
         gain.gain.setValueAtTime(0.08, now + idx * 0.08);
         gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.15);
 
-        osc.connect(gain);
-        gain.connect(ctx.destination);
+        osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+      osc.connect(gain);
+        gain.connect(this.output!);
 
         osc.start(now + idx * 0.08);
         osc.stop(now + idx * 0.08 + 0.15);
@@ -91,8 +116,9 @@ class SoundEffects {
       gain.gain.setValueAtTime(0.08, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
 
+      osc.onended = () => { osc.disconnect(); gain.disconnect(); };
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.output!);
 
       osc.start(now);
       osc.stop(now + 0.2);
@@ -115,8 +141,9 @@ class SoundEffects {
       gain.gain.setValueAtTime(0.05, now);
       gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.04);
 
+      osc.onended = () => { osc.disconnect(); gain.disconnect(); };
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(this.output!);
 
       osc.start(now);
       osc.stop(now + 0.04);
@@ -144,8 +171,9 @@ class SoundEffects {
         gain.gain.setValueAtTime(0.09, start);
         gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
 
-        osc.connect(gain);
-        gain.connect(ctx.destination);
+        osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+      osc.connect(gain);
+        gain.connect(this.output!);
 
         osc.start(start);
         osc.stop(start + duration);
