@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
-import { MockGameProvider } from '@/context/MockGameContext';
+import { GameProvider } from '@/context/GameContext';
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
-  return <MockGameProvider>{children}</MockGameProvider>;
+  return <GameProvider>{children}</GameProvider>;
 }
