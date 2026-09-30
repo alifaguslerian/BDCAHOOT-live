@@ -4,7 +4,7 @@ Kuis multiplayer di jaringan lokal: Host buat room, pemain masuk dengan kode, so
 
 ## Menjalankan
 
-Gunakan Node.js 22+. Instal dan build sebelum acara saat Internet tersedia:
+Gunakan Node.js 22.22.2+ (seri 22), 24.15.0+ (seri 24), atau 26+. Versi minimum ini juga memenuhi kebutuhan lingkungan DOM pengujian. Instal dan build sebelum acara saat Internet tersedia:
 
 ```sh
 npm ci
