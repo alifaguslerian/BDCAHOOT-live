@@ -15,7 +15,7 @@ import {
   Clock,
   Zap,
 } from 'lucide-react';
-import { useMockGame } from '@/context/MockGameContext';
+import { useGame } from '@/context/GameContext';
 import { sound, triggerHaptic } from '@/lib/soundFX';
 import type { Player } from '@/types/game';
 
@@ -25,14 +25,14 @@ interface PlayerFinalViewProps {
 
 export function PlayerFinalView({ player }: PlayerFinalViewProps) {
   const router = useRouter();
-  const { room, rankings, setCurrentPlayerId } = useMockGame();
+  const { room, rankings, setCurrentPlayerId } = useGame();
 
   const totalPlayers = Object.keys(room.players).length;
   const currentRankItem = rankings.find((r) => r.playerId === player.id);
   const finalRank = currentRankItem?.rank ?? 1;
   const totalScore = player.score;
 
-  const totalQuestions = room.questions.length;
+  const totalQuestions = room.totalQuestions;
   const answersList = Object.values(player.answers);
   const correctCount = answersList.filter((a) => a.isCorrect).length;
   const accuracyPct = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;

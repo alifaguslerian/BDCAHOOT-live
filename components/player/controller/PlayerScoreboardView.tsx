@@ -13,7 +13,7 @@ import {
   Clock,
   Radio,
 } from 'lucide-react';
-import { useMockGame } from '@/context/MockGameContext';
+import { useGame } from '@/context/GameContext';
 import type { Player } from '@/types/game';
 
 interface PlayerScoreboardViewProps {
@@ -21,7 +21,7 @@ interface PlayerScoreboardViewProps {
 }
 
 export function PlayerScoreboardView({ player }: PlayerScoreboardViewProps) {
-  const { room, rankings } = useMockGame();
+  const { room, rankings } = useGame();
 
   const totalPlayers = Object.keys(room.players).length;
   const currentRankItem = rankings.find((r) => r.playerId === player.id);
@@ -38,7 +38,7 @@ export function PlayerScoreboardView({ player }: PlayerScoreboardViewProps) {
   const totalQuestionsDone = room.currentQuestionIndex + 1;
   const answersList = Object.values(player.answers);
   const correctCount = answersList.filter((a) => a.isCorrect).length;
-  const isLastQuestion = room.currentQuestionIndex >= room.questions.length - 1;
+  const isLastQuestion = room.currentQuestionIndex >= room.totalQuestions - 1;
 
   return (
     <div className="w-full max-w-md mx-auto min-h-screen flex flex-col justify-between p-4 sm:p-6 bg-[#0B0E14] text-[#E1E2EB] select-none">
@@ -51,7 +51,7 @@ export function PlayerScoreboardView({ player }: PlayerScoreboardViewProps) {
           </span>
         </div>
         <span className="text-[10px] bg-[#151A22] px-2 py-0.5 rounded border border-[#272A31]">
-          SOAL {totalQuestionsDone} DARI {room.questions.length}
+          SOAL {totalQuestionsDone} DARI {room.totalQuestions}
         </span>
       </header>
 

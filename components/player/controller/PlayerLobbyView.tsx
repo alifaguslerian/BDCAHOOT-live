@@ -14,7 +14,7 @@ import {
   Sparkles,
   Wifi,
 } from 'lucide-react';
-import { useMockGame } from '@/context/MockGameContext';
+import { useGame } from '@/context/GameContext';
 import { sound, triggerHaptic } from '@/lib/soundFX';
 import type { Player } from '@/types/game';
 
@@ -25,7 +25,7 @@ interface PlayerLobbyViewProps {
 
 export function PlayerLobbyView({ player, roomCode }: PlayerLobbyViewProps) {
   const router = useRouter();
-  const { room, setCurrentPlayerId } = useMockGame();
+  const { room, setCurrentPlayerId } = useGame();
   const [isMuted, setIsMuted] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 

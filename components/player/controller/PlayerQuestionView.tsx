@@ -1,4 +1,5 @@
 'use client';
+import type { PublicQuestion } from '@/types/network';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
@@ -13,7 +14,7 @@ import {
   AlertCircle,
   Loader2,
 } from 'lucide-react';
-import { useMockGame } from '@/context/MockGameContext';
+import { useGame } from '@/context/GameContext';
 import { sound, triggerHaptic } from '@/lib/soundFX';
 import { computeAuthoritativeRemainingSeconds } from '@/lib/timeSync';
 import type { OptionId, QuizQuestion } from '@/types/quiz';
@@ -21,7 +22,7 @@ import type { Player } from '@/types/game';
 
 interface PlayerQuestionViewProps {
   player: Player;
-  question: QuizQuestion;
+  question: PublicQuestion;
   questionIndex: number;
   totalQuestions: number;
 }
@@ -92,26 +93,26 @@ export function PlayerQuestionView({
   questionIndex,
   totalQuestions,
 }: PlayerQuestionViewProps) {
-  const { room, submitAnswer, getPlayerAnswer, hasPlayerAnswered, serverOffsetMs } = useMockGame();
+  const { room, submitAnswer, getPlayerAnswer, hasPlayerAnswered, serverOffsetMs, pendingOption, answerConfirmed } = useGame();
 
   // Optimistic & transient submission state
   const serverAnswer = getPlayerAnswer(player.id, questionIndex);
   const [submissionStatus, setSubmissionStatus] = useState<
-    'idle' | 'transmitting' | 'confirmed' | 'rejected'
+    'idle' | 'transmitting' | 'confirmed' | 'rejected' | 'unknown'
   >('idle');
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [optimisticOption, setOptimisticOption] = useState<OptionId | null>(null);
 
   const hasServerRecord = Boolean(serverAnswer || hasPlayerAnswered(player.id));
-  const selectedOption = optimisticOption ?? serverAnswer?.selectedOption ?? null;
-  const isLocked = Boolean(optimisticOption || hasServerRecord);
+  const selectedOption = pendingOption ?? optimisticOption ?? serverAnswer?.selectedOption ?? null;
+  const isLocked = Boolean(hasServerRecord || submissionStatus === 'transmitting');
 
   const [showQuestionText, setShowQuestionText] = useState(true);
 
   // Synchronized countdown timer aligned with server-authoritative clock and NTP offset
   const timerTotalSeconds = question.timerSeconds ?? 10;
   const [remainingSeconds, setRemainingSeconds] = useState<number>(() =>
-    computeAuthoritativeRemainingSeconds(room.questionEndsAtMs, serverOffsetMs, Date.now()) || timerTotalSeconds
+    computeAuthoritativeRemainingSeconds(room.questionEndsAtMs, serverOffsetMs, Date.now())
   );
 
   useEffect(() => {
@@ -138,8 +139,8 @@ export function PlayerQuestionView({
 
   // Handle Option Tap with strict server confirmation and immediate rollback on rejection
   const handleSelectOption = useCallback(
-    (option: OptionId) => {
-      if (isCardDisabled) return; // Prevent tap if already locked or time is up
+    async (option: OptionId) => {
+      if (hasServerRecord || submissionStatus === 'transmitting' || (isTimeUp && !pendingOption)) return; // Prevent tap if already locked or time is up
 
       // 1. Optimistic tactile feedback immediately
       setOptimisticOption(option);
@@ -150,11 +151,11 @@ export function PlayerQuestionView({
 
       // 2. Transmit to server and validate authoritative response
       try {
-        const res = submitAnswer(player.id, option);
+        const res = await submitAnswer(player.id, option);
         if (!res || !res.success) {
           // ROLLBACK: Server rejected answer (e.g. late packet, grace period expired, wrong stage)
           setOptimisticOption(null);
-          setSubmissionStatus('rejected');
+          setSubmissionStatus(res.code === 'UNKNOWN' ? 'unknown' : 'rejected');
           setSubmissionError(res?.error || 'Gagal: Waktu sudah habis / Koneksi buruk');
           sound.playError();
           triggerHaptic([50, 50, 50]);
@@ -173,7 +174,7 @@ export function PlayerQuestionView({
         triggerHaptic([50, 50, 50]);
       }
     },
-    [isCardDisabled, player.id, submitAnswer]
+    [hasServerRecord, submissionStatus, isTimeUp, pendingOption, player.id, submitAnswer]
   );
 
   return (
@@ -240,13 +241,13 @@ export function PlayerQuestionView({
       </header>
 
       {/* Dynamic Status / Submission Banner (D16) */}
-      {submissionError ? (
+      {submissionError && !hasServerRecord ? (
         <div className="my-2 p-3 rounded-xl bg-[#EF4444]/15 border border-[#EF4444] flex items-center justify-between animate-in fade-in slide-in-from-top-1 duration-200">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-5 h-5 text-[#EF4444] shrink-0" />
             <div>
               <p className="font-anybody font-extrabold text-xs sm:text-sm text-[#FFB4AB] tracking-wide uppercase">
-                Pengiriman Ditolak
+                {pendingOption ? 'Konfirmasi Belum Diterima' : 'Pengiriman Ditolak'}
               </p>
               <p className="text-[11px] text-[#FF897D] font-space font-medium">
                 {submissionError}
@@ -313,6 +314,7 @@ export function PlayerQuestionView({
         </div>
       )}
 
+      {pendingOption && !answerConfirmed && submissionStatus !== 'transmitting' && <button className="p-3 border rounded text-[#FFC880]" onClick={() => handleSelectOption(pendingOption)}>Konfirmasi belum diterima. Kirim ulang pilihan {pendingOption}</button>}
       {/* 4 Large Colored Tap Cards (D15 Mobile Grid) */}
       <main className="flex-1 flex flex-col justify-center py-2">
         <div className="grid grid-cols-2 gap-3 sm:gap-4 h-full min-h-[320px] sm:min-h-[380px]">
@@ -327,7 +329,7 @@ export function PlayerQuestionView({
                 key={opt}
                 id={`btn-player-opt-${opt}`}
                 type="button"
-                disabled={isCardDisabled}
+                disabled={isCardDisabled || Boolean(pendingOption && pendingOption !== opt)}
                 onClick={() => handleSelectOption(opt)}
                 className={`group relative flex flex-col justify-between p-4 rounded-2xl border-2 transition-all duration-150 text-left cursor-pointer active:scale-95 ${
                   style.bgColor

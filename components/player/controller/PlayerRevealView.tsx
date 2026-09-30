@@ -1,4 +1,5 @@
 'use client';
+import type { PublicQuestion } from '@/types/network';
 
 import React, { useEffect } from 'react';
 import {
@@ -11,14 +12,14 @@ import {
   ArrowRight,
   ShieldAlert,
 } from 'lucide-react';
-import { useMockGame } from '@/context/MockGameContext';
+import { useGame } from '@/context/GameContext';
 import { sound, triggerHaptic } from '@/lib/soundFX';
 import type { QuizQuestion, OptionId } from '@/types/quiz';
 import type { Player, PlayerAnswer } from '@/types/game';
 
 interface PlayerRevealViewProps {
   player: Player;
-  question: QuizQuestion;
+  question: PublicQuestion;
   questionIndex: number;
 }
 
@@ -27,7 +28,7 @@ export function PlayerRevealView({
   question,
   questionIndex,
 }: PlayerRevealViewProps) {
-  const { getPlayerAnswer } = useMockGame();
+  const { getPlayerAnswer } = useGame();
   const answer = getPlayerAnswer(player.id, questionIndex);
 
   const isAnswered = Boolean(answer);
