@@ -22,7 +22,7 @@ import { sound } from '@/lib/soundFX';
 
 export default function HostLibraryPage() {
   const router = useRouter();
-  const [quizzes, setQuizzes] = useState<Quiz[]>(() => getStoredQuizzes());
+  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
@@ -31,6 +31,9 @@ export default function HostLibraryPage() {
   };
 
   useEffect(() => {
+    // Read browser-only storage after hydration; SSR starts with the same empty list.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setQuizzes(getStoredQuizzes());
     const handleStorageChange = () => {
       setQuizzes(getStoredQuizzes());
     };
