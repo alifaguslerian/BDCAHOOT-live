@@ -38,6 +38,32 @@ async function request<T>(socket: Socket, event: string, payload: unknown): Prom
 }
 const resume = (socket: Socket, credentials: SessionCredentials) => request<RoomView>(socket, 'session:resume', credentials);
 
+test('leaving lobby frees the name, invalidates old credentials, and allows retry', async () => {
+  const f = await fixture();
+  try {
+    const host = await f.connect(), player = await f.connect();
+    const owner = await request<SessionCredentials>(host, 'room:create', { quiz, hostKey: 'test-operator-key' });
+    await assert.rejects(request(host, 'room:leave', {}), /Host/);
+    const identity = await request<SessionCredentials>(player, 'room:join', { code: owner.code, name: 'ALDI', requestId: randomUUID() });
+    await request(player, 'room:leave', {});
+    await request(player, 'room:leave', {});
+    assert.equal(Object.keys((await resume(host, owner)).players).length, 0);
+    await assert.rejects(resume(player, identity));
+    const replacement = await request<SessionCredentials>(player, 'room:join', { code: owner.code, name: 'ALDI', requestId: randomUUID() });
+    assert.notEqual(replacement.playerId, identity.playerId);
+    const view = await resume(host, owner);
+    await request(host, 'host:command', { sessionId: owner.sessionId, revision: view.revision, action: 'start' });
+    await assert.rejects(request(player, 'room:leave', {}), /berlangsung/);
+    assert.equal(Object.keys((await resume(host, owner)).players).length, 1);
+    const active = await resume(host, owner);
+    await request(host, 'host:command', { sessionId: owner.sessionId, revision: active.revision, action: 'finish' });
+    const final = await resume(host, owner);
+    await request(player, 'room:leave', {});
+    assert.deepEqual((await resume(host, owner)).rankings, final.rankings);
+    await assert.rejects(resume(player, replacement));
+  } finally { await f.close(); }
+});
+
 test('creation retry restores the same room and host credentials after an uncertain ACK', async () => {
   const f = await fixture();
   try {
