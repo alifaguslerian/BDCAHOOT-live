@@ -25,7 +25,7 @@ interface PlayerFinalViewProps {
 
 export function PlayerFinalView({ player }: PlayerFinalViewProps) {
   const router = useRouter();
-  const { room, rankings, setCurrentPlayerId } = useGame();
+  const { room, rankings, leaveRoom, isLeaving } = useGame();
 
   const totalPlayers = Object.keys(room.players).length;
   const currentRankItem = rankings.find((r) => r.playerId === player.id);
@@ -51,11 +51,10 @@ export function PlayerFinalView({ player }: PlayerFinalViewProps) {
     triggerHaptic([50, 100, 50, 150]);
   }, []);
 
-  const handlePlayAgain = () => {
+  const handlePlayAgain = async () => {
     sound.playTap();
     triggerHaptic(20);
-    setCurrentPlayerId(null);
-    router.push('/player/join');
+    if (await leaveRoom()) router.push('/player/join');
   };
 
   return (
@@ -161,6 +160,7 @@ export function PlayerFinalView({ player }: PlayerFinalViewProps) {
         <button
           type="button"
           onClick={handlePlayAgain}
+          disabled={isLeaving}
           className="w-full h-12 bg-[#F5A623] hover:bg-[#FFC880] active:scale-98 text-[#452B00] font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer font-space"
         >
           <RotateCcw className="w-4 h-4" />

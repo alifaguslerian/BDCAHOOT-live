@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -25,8 +25,9 @@ interface PlayerLobbyViewProps {
 
 export function PlayerLobbyView({ player, roomCode }: PlayerLobbyViewProps) {
   const router = useRouter();
-  const { room, setCurrentPlayerId } = useGame();
-  const [isMuted, setIsMuted] = useState(false);
+  const { room, leaveRoom, isLeaving, connection } = useGame();
+  const isMuted = useSyncExternalStore(sound.subscribe, sound.isMuted, () => false);
+  const connected = connection === 'Terhubung';
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 
   const totalPlayers = Object.keys(room.players).length;
@@ -38,11 +39,10 @@ export function PlayerLobbyView({ player, roomCode }: PlayerLobbyViewProps) {
     }
   };
 
-  const handleLeaveRoom = () => {
+  const handleLeaveRoom = async () => {
     sound.playTap();
     triggerHaptic(20);
-    setCurrentPlayerId(null);
-    router.push('/player/join');
+    if (await leaveRoom()) router.push('/player/join');
   };
 
   return (
@@ -50,10 +50,10 @@ export function PlayerLobbyView({ player, roomCode }: PlayerLobbyViewProps) {
       {/* Top Status Bar (Low Power OLED style) */}
       <header className="flex items-center justify-between py-2 border-b border-[#1E2530] text-xs font-space text-[#8B93A1]">
         <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-[#10B981] animate-ping" />
+          <span className={`w-2 h-2 rounded-full ${connected ? 'bg-[#10B981]' : 'bg-amber-400'}`} />
           <span className="flex items-center gap-1 text-[#85E28A] font-medium tracking-wide">
             <Wifi className="w-3.5 h-3.5" />
-            TERKONEKSI
+            {connection}
           </span>
         </div>
 
@@ -62,7 +62,7 @@ export function PlayerLobbyView({ player, roomCode }: PlayerLobbyViewProps) {
             type="button"
             onClick={() => {
               const next = !isMuted;
-              setIsMuted(next);
+              sound.setMuted(next);
               if (!next) {
                 sound.playTap();
                 triggerHaptic(15);
@@ -70,6 +70,7 @@ export function PlayerLobbyView({ player, roomCode }: PlayerLobbyViewProps) {
             }}
             className="p-1.5 rounded-lg bg-[#151A22] border border-[#272A31] text-[#8B93A1] hover:text-[#E1E2EB] active:scale-95 transition-all"
             title={isMuted ? 'Nyalakan Suara' : 'Bisukan Suara'}
+            aria-pressed={isMuted}
           >
             {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5 text-[#FFC880]" />}
           </button>
@@ -149,7 +150,7 @@ export function PlayerLobbyView({ player, roomCode }: PlayerLobbyViewProps) {
       {/* Footer Info (OLED Saver) */}
       <footer className="py-2 text-center text-[10px] text-[#525965] font-space flex items-center justify-center gap-1.5">
         <BatteryCharging className="w-3.5 h-3.5 text-[#85E28A]" />
-        <span>Mode hemat daya aktif. Layar ponsel siap digunakan saat game dimulai.</span>
+        <span>Biarkan halaman ini terbuka selama permainan.</span>
       </footer>
 
       {/* Exit Confirmation Modal */}
@@ -173,9 +174,10 @@ export function PlayerLobbyView({ player, roomCode }: PlayerLobbyViewProps) {
               <button
                 type="button"
                 onClick={handleLeaveRoom}
+                disabled={isLeaving || !connected}
                 className="flex-1 py-2.5 rounded-lg bg-[#EF4444] text-xs font-bold text-white uppercase tracking-wider font-space"
               >
-                Ya, Keluar
+                {isLeaving ? 'Mengeluarkan…' : 'Ya, Keluar'}
               </button>
             </div>
           </div>

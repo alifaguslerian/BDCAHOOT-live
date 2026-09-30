@@ -21,6 +21,7 @@ export function PlayerControllerContainer({ roomCode }: PlayerControllerContaine
     ready,
     hasRoom,
     currentQuestion,
+    isLeaving,
   } = useGame();
 
   // Check if room code matches
@@ -30,8 +31,8 @@ export function PlayerControllerContainer({ roomCode }: PlayerControllerContaine
   const player = currentPlayerId ? room.players[currentPlayerId] : null;
 
   useEffect(() => {
-    if (ready && (!hasRoom || !isRoomMatching || !currentPlayerId)) router.replace(`/player/name?room=${encodeURIComponent(roomCode)}`);
-  }, [ready, hasRoom, isRoomMatching, currentPlayerId, roomCode, router]);
+    if (ready && !isLeaving && (!hasRoom || !isRoomMatching || !currentPlayerId)) router.replace(`/player/name?room=${encodeURIComponent(roomCode)}`);
+  }, [ready, isLeaving, hasRoom, isRoomMatching, currentPlayerId, roomCode, router]);
   if (!ready || !player || !isRoomMatching) return <div className="min-h-screen bg-[#0B0E14] text-white p-12 text-center">Memulihkan sesi pemain…</div>;
 
   // 4. Authenticated Player -> Route By Game Stage
