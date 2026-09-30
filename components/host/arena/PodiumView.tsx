@@ -33,10 +33,9 @@ export const PodiumView: React.FC<PodiumViewProps> = ({ roomCode }) => {
     sound.playFanfare();
   }, []);
 
-  const handleReturnToLibrary = () => {
+  const handleReturnToLibrary = async () => {
     sound.playTap();
-    resetRoom();
-    router.push('/host/library');
+    if (await resetRoom()) router.push('/host/library');
   };
 
   const handlePlayAgain = () => {

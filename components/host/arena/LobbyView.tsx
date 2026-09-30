@@ -32,6 +32,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({ roomCode }) => {
     startQuiz,
     kickPlayer,
     resetRoom,
+    isHostActionLoading,
+    connection,
   } = useGame();
 
   const [copied, setCopied] = useState(false);
@@ -40,7 +42,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({ roomCode }) => {
 
   const playersList = Object.values(room.players);
   const playerCount = playersList.length;
-  const canStart = playerCount > 0;
+  const canStart = playerCount > 0 && !isHostActionLoading && connection === 'Terhubung';
 
   const handleCopyCode = async () => {
     try {
@@ -78,9 +80,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({ roomCode }) => {
     kickPlayer(playerId);
   };
 
-  const handleExitRoom = () => {
-    resetRoom();
-    router.push('/host/manage');
+  const handleExitRoom = async () => {
+    if (await resetRoom()) router.push('/host/library');
   };
 
   return (
@@ -162,7 +163,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({ roomCode }) => {
               {playerCount}
             </span>
             <span className="text-xs sm:text-sm text-[#8B93A1] font-space">
-              Peserta Terhubung
+              Peserta Terdaftar
             </span>
           </div>
         </div>
