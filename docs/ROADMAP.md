@@ -1,6 +1,6 @@
 # Status implementasi BDCAHOOT Live
 
-Diperbarui 29 September 2026.
+Diperbarui 1 Oktober 2026.
 
 Fase 1–7 menghasilkan UI dan prototipe antar-tab. MockGameContext, BroadcastChannel,
 grid simulator, dan skrip tes yang menyalin logika aplikasi sudah diganti.
@@ -22,7 +22,21 @@ termasuk layar terkunci, pindah aplikasi, reconnect, dan sesi 30+ soal tanpa Int
 Tes transport lokal menggunakan clock soal dipercepat; hasilnya bukan pengukuran
 rendering 100 HP, interferensi Wi-Fi, atau jaminan bebas kebocoran memori.
 
-## Fase berikutnya — pemulihan setelah proses mati
+## Tahapan penerimaan menuju acara
+
+| Tahap | Status | Bukti / pekerjaan tersisa |
+| --- | --- | --- |
+| 8A: mute, status, keluar/masuk | Perbaikan utama lolos tes otomatis dan browser lokal | Mute lintas efek dan refresh; keluar lobby membebaskan nama; navigasi keluar tidak ditimpa redirect sesi |
+| 8B: gangguan koneksi | Perbaikan dan simulasi otomatis lokal lolos | ACK join/resume/jawaban hilang, reconnect berulang, jawaban terlambat, ACK soal lama, dan pemulihan saat halaman aktif; layar terkunci/background pada HP masih perlu diuji |
+| 8C: ketahanan | Berikutnya | 100 klien × 40 soal dengan durasi nyata; ukur CPU, memori, latensi dan UI |
+| 9A: penyimpanan pertandingan | Belum | Simpan progres terkonfirmasi dan tentukan aturan melanjutkan soal setelah crash |
+| 9B: pemulihan dan keamanan | Belum | Uji restart, konsistensi skor, token, spam, dan paket rusak |
+| Persiapan dan rehearsal acara | Belum | Panduan operasional serta uji 50–100 HP pada router lokasi |
+
+Hasil 8A dan simulasi 8B tidak berarti seluruh UI telah selesai diaudit atau seluruh Fase 8 siap acara.
+Jumlah peserta Host adalah peserta terdaftar, bukan pengukuran jumlah socket yang sedang online.
+
+## Penyimpanan pertandingan
 
 State pertandingan masih di memori. Refresh browser dapat pulih; restart server
 menghapus room. Penyimpanan snapshot pertandingan belum diimplementasikan.
