@@ -11,6 +11,7 @@ const EMPTY_ROOM: RoomView = { code: '', sessionId: '', revision: -1, quizTitle:
 const SESSION_KEY = 'bdcahoot_session';
 const ANSWER_KEY = 'bdcahoot_submission';
 const CREATE_KEY = 'bdcahoot_creation_request';
+const JOIN_KEY = 'bdcahoot_join_request';
 function requestId() { return Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join(''); }
 type Submission = { request: SubmitRequest; receipt?: AnswerReceipt };
 function readSaved<T>(key: string): T | null { try { return JSON.parse(sessionStorage.getItem(key) || 'null'); } catch { return null; } }
@@ -40,6 +41,8 @@ function useGameState() {
   const [isHostActionLoading, setHostLoading] = useState(false);
   const joinRequest = useRef<{ code: string; name: string; requestId: string } | null>(null);
   const retryResume = useRef<(() => void) | null>(null);
+  const leaving = useRef(false);
+  const [isLeaving, setLeaving] = useState(false);
   function storeSubmission(value: Submission | null) { submissionRef.current = value; setSubmission(value); save(ANSWER_KEY, value); }
   function apply(view: RoomView) {
     if (view.sessionId !== credentials.current?.sessionId) return;
@@ -48,6 +51,7 @@ function useGameState() {
     if (view.ownReceipt) storeSubmission({ request: { sessionId: view.ownReceipt.sessionId, questionIndex: view.ownReceipt.questionIndex, submissionId: view.ownReceipt.submissionId, option: view.ownReceipt.selectedOption }, receipt: view.ownReceipt });
   }
   function remember(value: SessionCredentials) {
+    leaving.current = false; setLeaving(false);
     credentials.current = value; save(SESSION_KEY, value); setPlayerId(value.playerId || null); setRole(value.role);
     if (submissionRef.current?.request.sessionId !== value.sessionId) storeSubmission(null);
   }
@@ -72,9 +76,11 @@ function useGameState() {
     if (saved) remember(saved);
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     let synchronizing = false;
+    let syncAttempt = 0;
     const synchronize = async () => {
       if (synchronizing || !socket.connected || socketRef.current !== socket) return;
       synchronizing = true;
+      const attempt = ++syncAttempt;
       clearTimeout(retryTimer);
       authenticated.current = false;
       setConnection('Memulihkan koneksi…'); setError(null);
@@ -83,7 +89,7 @@ function useGameState() {
       const session = credentials.current;
       if (session) {
         const result = await request<RoomView>(ack => socket.timeout(6000).emit('session:resume', session, ack));
-        if (socketRef.current !== socket) return;
+        if (socketRef.current !== socket || attempt !== syncAttempt) return;
         if (credentials.current?.token !== session.token) { synchronizing = false; return; }
         if (result.success) { authenticated.current = true; apply(result.data); if (submissionRef.current && !submissionRef.current.receipt) void transmit(submissionRef.current); }
         else {
@@ -103,11 +109,15 @@ function useGameState() {
     };
     retryResume.current = () => { void synchronize(); };
     socket.on('connect', synchronize);
-    socket.on('disconnect', () => { authenticated.current = false; setConnection('Koneksi terputus — menghubungkan kembali…'); });
+    socket.on('disconnect', () => { syncAttempt++; synchronizing = false; clearTimeout(retryTimer); authenticated.current = false; setConnection('Koneksi terputus — menghubungkan kembali…'); });
     socket.on('connect_error', () => { setConnection('Server belum terhubung'); if (!credentials.current) setReady(true); });
     socket.on('room:state', apply);
     socket.on('room:count', count => { const current = roomRef.current; if (count.sessionId === current.sessionId && count.questionIndex === current.currentQuestionIndex) apply({ ...current, answeredCount: Math.max(current.answeredCount, count.count) }); });
-    socket.on('session:ended', message => { clearSession(); setError(message); });
+    socket.on('session:ended', (message, sessionId, playerId) => {
+      if (credentials.current?.sessionId !== sessionId || credentials.current?.playerId !== playerId) return;
+      syncAttempt++; synchronizing = false; clearTimeout(retryTimer);
+      clearSession(); setError(message); setReady(true);
+    });
     const refresh = () => { if (socket.connected) void synchronize(); };
     const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
     document.addEventListener('visibilitychange', onVisible);
@@ -126,8 +136,9 @@ function useGameState() {
     remember(session);
     authenticated.current = false;
     const socket = socketRef.current!;
+    const connectionId = socket.id;
     const result = await request<RoomView>(ack => socket.timeout(6000).emit('session:resume', session, ack));
-    if (socketRef.current !== socket || credentials.current?.token !== session.token) return;
+    if (socketRef.current !== socket || credentials.current?.token !== session.token || !socket.connected || socket.id !== connectionId) return;
     if (result.success) { authenticated.current = true; apply(result.data); }
     else { setError(result.error); if (result.code === 'UNKNOWN' || result.code === 'RATE_LIMIT') retryResume.current?.(); }
   }
@@ -145,20 +156,40 @@ function useGameState() {
   async function joinRoomAsPlayer(name: string, code: string) {
     const socket = socketRef.current;
     if (!socket?.connected) return { success: false, error: 'Server belum terhubung.' };
+    if (!joinRequest.current) joinRequest.current = readSaved(JOIN_KEY);
     if (joinRequest.current?.code !== code || joinRequest.current?.name !== name) joinRequest.current = { code, name, requestId: requestId() };
-    const result = await request<SessionCredentials>(ack => socket.timeout(6000).emit('room:join', joinRequest.current!, ack));
-    if (!result.success) { if (result.code !== 'UNKNOWN') joinRequest.current = null; return result; }
-    await resumeNow(result.data); joinRequest.current = null; return { success: true, playerId: result.data.playerId };
+    const attempt = joinRequest.current;
+    save(JOIN_KEY, attempt);
+    const result = await request<SessionCredentials>(ack => socket.timeout(6000).emit('room:join', attempt, ack));
+    if (!result.success) {
+      if (result.code !== 'UNKNOWN' && result.code !== 'RATE_LIMIT' && joinRequest.current === attempt) { joinRequest.current = null; save(JOIN_KEY, null); }
+      return result;
+    }
+    await resumeNow(result.data);
+    if (joinRequest.current === attempt) { joinRequest.current = null; save(JOIN_KEY, null); }
+    return { success: true, playerId: result.data.playerId };
+  }
+  async function leaveRoom() {
+    const socket = socketRef.current;
+    if (leaving.current) return false;
+    if (!socket?.connected || !authenticated.current) { setError('Tunggu koneksi pulih sebelum keluar agar sesi tidak hilang.'); return false; }
+    leaving.current = true; setLeaving(true);
+    const result = await request(ack => socket.timeout(6000).emit('room:leave', {}, ack));
+    if (!result.success) { leaving.current = false; setLeaving(false); setError(result.error); return false; }
+    clearSession(); setError(null);
+    return true;
   }
   async function command(action: HostCommand['action'], playerId?: string) {
     const socket = socketRef.current, current = roomRef.current;
-    if (!socket?.connected || !credentials.current || !authenticated.current || hostInFlight.current) { setError('Server belum terhubung atau aksi masih diproses.'); return; }
+    if (!socket?.connected || !credentials.current || !authenticated.current || hostInFlight.current) { setError('Server belum terhubung atau aksi masih diproses.'); return false; }
     hostInFlight.current = true;
     setHostLoading(true);
     const result = await request<SessionCredentials | undefined>(ack => socket.timeout(6000).emit('host:command', { sessionId: current.sessionId, revision: current.revision, action, playerId }, ack));
     hostInFlight.current = false;
     setHostLoading(false);
     if (!result.success) setError(result.error); else { setError(null); if (result.data) await resumeNow(result.data); }
+    if (result.success && action === 'reset') clearSession();
+    return result.success;
   }
   async function submitAnswer(playerId: string, option: OptionId) {
     if (playerId !== credentials.current?.playerId) return { success: false as const, error: 'Sesi pemain tidak valid.' };
@@ -171,7 +202,7 @@ function useGameState() {
   }
   const activeSubmission = submission?.request.sessionId === room.sessionId && submission.request.questionIndex === room.currentQuestionIndex ? submission : null;
   return { room, hasRoom: Boolean(room.sessionId), currentPlayerId, role, ready, connection, error, serverOffsetMs, isHostActionLoading,
-    createRoomFromQuiz, inspectRoom, joinRoomAsPlayer, submitAnswer,
+    createRoomFromQuiz, inspectRoom, joinRoomAsPlayer, submitAnswer, leaveRoom, isLeaving,
     pendingOption: activeSubmission?.request.option ?? null,
     answerConfirmed: Boolean(activeSubmission?.receipt),
     hasPlayerAnswered: (id: string) => Boolean(room.players[id]?.answers[room.currentQuestionIndex] || (id === currentPlayerId && activeSubmission?.receipt)),
