@@ -4,27 +4,23 @@ import React, { useState, Suspense, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { User, ArrowRight, ArrowLeft, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { useMockGame } from '@/context/MockGameContext';
+import { useGame } from '@/context/GameContext';
 import { sound } from '@/lib/soundFX';
 import { validatePlayerName } from '@/lib/validation';
-import { BlockedGameState } from '@/components/player/BlockedGameState';
 
 function PlayerNameContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const roomCode = (searchParams?.get('room') || 'BDA729').toUpperCase();
+  const roomCode = (searchParams?.get('room') || '').toUpperCase();
 
-  const { room, joinRoomAsPlayer, setCurrentPlayerId } = useMockGame();
+  const { room, joinRoomAsPlayer } = useGame();
   const [name, setName] = useState('');
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Check if room stage is blocked
-  const isRoomBlocked = room.stage !== 'LOBBY';
-
   // Live duplicate check against existing room players
   const existingNames = useMemo(() => {
-    return Object.values(room.players).map((p) => p.name);
-  }, [room.players]);
+    return room.code === roomCode ? Object.values(room.players).map((p) => p.name) : [];
+  }, [room.players, room.code, roomCode]);
 
   // Live validation computation
   const validationState = useMemo(() => {
@@ -38,25 +34,12 @@ function PlayerNameContent() {
     };
   }, [name, existingNames]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError(null);
 
-    // Guard: Check if room matches
-    if (room.code !== roomCode) {
-      sound.playError();
-      setSubmitError(`Room "${roomCode}" tidak sesuai dengan sesi aktif (${room.code}).`);
-      return;
-    }
-
-    // Guard: Check if game is blocked
-    if (room.stage !== 'LOBBY') {
-      sound.playError();
-      return;
-    }
-
     const cleanName = name.trim().toUpperCase();
-    const res = joinRoomAsPlayer(cleanName);
+    const res = await joinRoomAsPlayer(cleanName, roomCode);
 
     if (!res.success) {
       sound.playError();
@@ -65,20 +48,8 @@ function PlayerNameContent() {
     }
 
     sound.playSuccess();
-    if (res.playerId) {
-      setCurrentPlayerId(res.playerId);
-    }
     router.push(`/player/room/${roomCode}`);
   };
-
-  if (isRoomBlocked) {
-    return (
-      <BlockedGameState
-        roomCode={roomCode}
-        stage={room.stage}
-      />
-    );
-  }
 
   return (
     <div className="w-full max-w-sm flex flex-col gap-6">
