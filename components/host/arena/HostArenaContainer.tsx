@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useMockGame } from '@/context/MockGameContext';
+import { useGame } from '@/context/GameContext';
 import { LobbyView } from './LobbyView';
 import { QuestionView } from './QuestionView';
 import { RevealView } from './RevealView';
@@ -15,7 +15,8 @@ interface HostArenaContainerProps {
 }
 
 export const HostArenaContainer: React.FC<HostArenaContainerProps> = ({ roomCode }) => {
-  const { room } = useMockGame();
+  const { room, ready, hasRoom, role } = useGame();
+  if (!ready || !hasRoom || role !== "host") return <div className="min-h-screen bg-[#07090E] text-white p-12 text-center">{!ready ? "Memulihkan sesi…" : "Sesi host tidak tersedia di tab ini."}<br /><Link href="/host/library">Kembali ke Library</Link></div>;
   const normalizedInputCode = roomCode.toUpperCase().trim();
   const activeRoomCode = room.code.toUpperCase().trim();
 

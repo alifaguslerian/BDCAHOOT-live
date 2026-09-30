@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { useMockGame } from '@/context/MockGameContext';
+import { useGame } from '@/context/GameContext';
 import { sound } from '@/lib/soundFX';
 import {
   Trophy,
@@ -27,10 +27,10 @@ export const ScoreboardView: React.FC<ScoreboardViewProps> = ({ roomCode }) => {
     nextQuestion,
     finishQuiz,
     isHostActionLoading,
-  } = useMockGame();
+  } = useGame();
 
   const currentIdx = room.currentQuestionIndex;
-  const totalQuestions = room.questions.length;
+  const totalQuestions = room.totalQuestions;
   const isLastQuestion = currentIdx >= totalQuestions - 1;
 
   // Filter Top 10 participants

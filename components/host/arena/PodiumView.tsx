@@ -2,7 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useMockGame } from '@/context/MockGameContext';
+import { useGame } from '@/context/GameContext';
 import { sound } from '@/lib/soundFX';
 import {
   Trophy,
@@ -21,7 +21,7 @@ interface PodiumViewProps {
 
 export const PodiumView: React.FC<PodiumViewProps> = ({ roomCode }) => {
   const router = useRouter();
-  const { room, rankings, resetRoom } = useMockGame();
+  const { room, rankings, resetRoom } = useGame();
 
   const totalPlayers = rankings.length;
   const first = rankings[0] ?? null;
@@ -36,12 +36,11 @@ export const PodiumView: React.FC<PodiumViewProps> = ({ roomCode }) => {
   const handleReturnToLibrary = () => {
     sound.playTap();
     resetRoom();
-    router.push('/host/manage');
+    router.push('/host/library');
   };
 
   const handlePlayAgain = () => {
-    sound.playTap();
-    resetRoom();
+    handleReturnToLibrary();
   };
 
   return (

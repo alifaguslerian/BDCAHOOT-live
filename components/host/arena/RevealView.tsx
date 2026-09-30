@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { OptionButton } from '@/components/common/OptionButton';
-import { useMockGame } from '@/context/MockGameContext';
+import { useGame } from '@/context/GameContext';
 import { sound } from '@/lib/soundFX';
 import { CheckCircle2, ArrowRight, BarChart3, Clock } from 'lucide-react';
 import { OPTION_CONFIGS, REVEAL_DURATION_MS } from '@/lib/constants';
@@ -18,19 +18,18 @@ export const RevealView: React.FC<RevealViewProps> = ({ roomCode }) => {
     currentQuestion,
     distribution,
     setStage,
-  } = useMockGame();
+    serverOffsetMs,
+  } = useGame();
 
   const totalPlayers = Object.keys(room.players).length;
   const currentIdx = room.currentQuestionIndex;
-  const totalQuestions = room.questions.length;
+  const totalQuestions = room.totalQuestions;
   const revealDurationMs = room.settings.revealDurationMs || REVEAL_DURATION_MS;
 
   const [remainingSec, setRemainingSec] = useState<number>(Math.ceil(revealDurationMs / 1000));
   const hasAdvancedRef = useRef(false);
 
   const handleAdvance = React.useCallback(() => {
-    if (hasAdvancedRef.current) return;
-    hasAdvancedRef.current = true;
     sound.playTap();
     setStage('SCOREBOARD');
   }, [setStage]);
@@ -41,20 +40,16 @@ export const RevealView: React.FC<RevealViewProps> = ({ roomCode }) => {
 
     const startTime = Date.now();
     const interval = setInterval(() => {
-      const elapsed = Date.now() - startTime;
-      const rem = Math.max(0, Math.ceil((revealDurationMs - elapsed) / 1000));
+      const rem = Math.max(0, Math.ceil(((room.revealEndsAtMs ?? Date.now()) - Date.now() - serverOffsetMs) / 1000));
       setRemainingSec(rem);
 
-      if (elapsed >= revealDurationMs) {
-        clearInterval(interval);
-        handleAdvance();
-      }
+
     }, 100);
 
     return () => clearInterval(interval);
-  }, [revealDurationMs, handleAdvance]);
+  }, [room.revealEndsAtMs, serverOffsetMs]);
 
-  if (!currentQuestion) return null;
+  if (!currentQuestion?.correctOption) return null;
 
   const correctOptId = currentQuestion.correctOption;
   const correctConfig = OPTION_CONFIGS[correctOptId];

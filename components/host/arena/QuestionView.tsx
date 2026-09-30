@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { ProjectorHeader } from '@/components/common/ProjectorHeader';
 import { OptionButton } from '@/components/common/OptionButton';
-import { useMockGame } from '@/context/MockGameContext';
+import { useGame } from '@/context/GameContext';
 import { sound } from '@/lib/soundFX';
 import { DEFAULT_TIMER_SECONDS } from '@/lib/constants';
 import { FastForward, Zap } from 'lucide-react';
@@ -19,18 +19,18 @@ export const QuestionView: React.FC<QuestionViewProps> = ({ roomCode }) => {
     currentQuestion,
     answeredCount,
     setStage,
-    simulateMockAnswers,
-  } = useMockGame();
+    serverOffsetMs,
+  } = useGame();
 
   const totalPlayers = Object.keys(room.players).length;
-  const totalQuestions = room.questions.length;
+  const totalQuestions = room.totalQuestions;
   const currentIdx = room.currentQuestionIndex;
   const totalTimerSec = currentQuestion?.timerSeconds ?? DEFAULT_TIMER_SECONDS;
 
   // Local tick countdown derived strictly from room.questionEndsAtMs
   const [secondsRemaining, setSecondsRemaining] = useState<number>(() => {
     if (!room.questionEndsAtMs) return totalTimerSec;
-    const diff = Math.max(0, Math.ceil((room.questionEndsAtMs - Date.now()) / 1000));
+    const diff = Math.max(0, Math.ceil((room.questionEndsAtMs - (Date.now() + serverOffsetMs)) / 1000));
     return diff;
   });
 
@@ -39,8 +39,6 @@ export const QuestionView: React.FC<QuestionViewProps> = ({ roomCode }) => {
 
   // Auto transition to REVEAL when timer hits 0
   const triggerReveal = useCallback(() => {
-    if (hasTriggeredRevealRef.current) return;
-    hasTriggeredRevealRef.current = true;
     sound.playSuccess();
     setStage('REVEAL');
   }, [setStage]);
@@ -52,7 +50,7 @@ export const QuestionView: React.FC<QuestionViewProps> = ({ roomCode }) => {
 
     const interval = setInterval(() => {
       if (!room.questionEndsAtMs) return;
-      const now = Date.now();
+      const now = Date.now() + serverOffsetMs;
       const remainingMs = room.questionEndsAtMs - now;
       const remSec = Math.max(0, Math.ceil(remainingMs / 1000));
       setSecondsRemaining(remSec);
@@ -65,22 +63,12 @@ export const QuestionView: React.FC<QuestionViewProps> = ({ roomCode }) => {
 
       if (remainingMs <= 0) {
         clearInterval(interval);
-        triggerReveal();
+
       }
     }, 100);
 
     return () => clearInterval(interval);
-  }, [room.questionEndsAtMs, triggerReveal]);
-
-  // Fast auto-advance when 100% of participants have responded
-  useEffect(() => {
-    if (totalPlayers > 0 && answeredCount >= totalPlayers && !hasTriggeredRevealRef.current) {
-      const timeout = setTimeout(() => {
-        triggerReveal();
-      }, 700);
-      return () => clearTimeout(timeout);
-    }
-  }, [answeredCount, totalPlayers, triggerReveal]);
+  }, [room.questionEndsAtMs, serverOffsetMs]);
 
   if (!currentQuestion) {
     return null;
@@ -160,17 +148,7 @@ export const QuestionView: React.FC<QuestionViewProps> = ({ roomCode }) => {
 
         {/* Fast dev test simulation / emergency bypass */}
         <div className="flex items-center gap-2">
-          {answeredCount < totalPlayers && (
-            <button
-              type="button"
-              onClick={simulateMockAnswers}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#181F2C] hover:bg-[#232C3E] text-[#8B93A1] hover:text-white transition-colors border border-[#232C3E]"
-              title="Simulasikan jawaban seluruh peserta untuk pengujian"
-            >
-              <Zap className="w-3.5 h-3.5 text-[#F5A623]" />
-              <span>Simulasi Jawaban</span>
-            </button>
-          )}
+
 
           <button
             type="button"

@@ -17,7 +17,7 @@ import {
   HelpCircle,
   Sparkles,
 } from 'lucide-react';
-import { useMockGame } from '@/context/MockGameContext';
+import { useGame } from '@/context/GameContext';
 import { sound } from '@/lib/soundFX';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -30,10 +30,9 @@ export const LobbyView: React.FC<LobbyViewProps> = ({ roomCode }) => {
   const {
     room,
     startQuiz,
-    addMockPlayer,
     kickPlayer,
     resetRoom,
-  } = useMockGame();
+  } = useGame();
 
   const [copied, setCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -73,10 +72,6 @@ export const LobbyView: React.FC<LobbyViewProps> = ({ roomCode }) => {
     startQuiz();
   };
 
-  const handleAddBot = () => {
-    sound.playTap();
-    addMockPlayer();
-  };
 
   const handleKick = (playerId: string) => {
     sound.playTap();
@@ -106,21 +101,12 @@ export const LobbyView: React.FC<LobbyViewProps> = ({ roomCode }) => {
               {room.quizTitle}
             </h1>
             <p className="text-xs text-[#8B93A1] font-space">
-              {room.questions.length} Soal • Tahap: Lobi Menunggu
+              {room.totalQuestions} Soal • Tahap: Lobi Menunggu
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={handleAddBot}
-            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#181F2C] hover:bg-[#232C3E] text-[#8B93A1] hover:text-white text-xs font-space font-medium border border-[#232C3E] transition-colors"
-            title="Tambah dummy player untuk uji coba solo"
-          >
-            <UserPlus className="w-3.5 h-3.5 text-[#F5A623]" />
-            <span>+ Tambah Bot</span>
-          </button>
 
           <button
             type="button"
@@ -179,15 +165,6 @@ export const LobbyView: React.FC<LobbyViewProps> = ({ roomCode }) => {
               Peserta Terhubung
             </span>
           </div>
-          {playerCount === 0 && (
-            <button
-              type="button"
-              onClick={handleAddBot}
-              className="text-xs text-[#F5A623] underline font-space hover:text-[#ffc880] transition-colors"
-            >
-              + Tambah Peserta Uji Coba
-            </button>
-          )}
         </div>
 
         {/* Dynamic Participants Roster (Animated) */}
@@ -244,14 +221,6 @@ export const LobbyView: React.FC<LobbyViewProps> = ({ roomCode }) => {
         </div>
 
         <div className="flex items-center gap-3 w-full sm:w-auto">
-          <button
-            type="button"
-            onClick={handleAddBot}
-            className="sm:hidden flex-1 py-3.5 px-4 rounded-xl bg-[#181F2C] border border-[#232C3E] text-xs font-space font-bold text-white flex items-center justify-center gap-1.5"
-          >
-            <UserPlus className="w-4 h-4 text-[#F5A623]" />
-            <span>+ Bot</span>
-          </button>
 
           <button
             id="btn-start-game"
