@@ -1,4 +1,4 @@
-import type { GameRoomSettings, GameStage, Player, PlayerAnswer, ScoreboardRankItem, OptionDistribution } from './game';
+import type { GameRoomSettings, GameStage, Player, ScoreboardRankItem, OptionDistribution } from './game';
 import type { Quiz, QuizQuestion, OptionId } from './quiz';
 
 export type PublicQuestion = Omit<QuizQuestion, 'correctOption'> & { correctOption?: OptionId };
@@ -40,4 +40,3 @@ export interface ServerEvents {
   'room:count': (payload: { sessionId: string; questionIndex: number; count: number }) => void;
   'session:ended': (message: string) => void;
 }
-export type PrivateAnswer = PlayerAnswer;

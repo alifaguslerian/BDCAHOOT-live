@@ -21,6 +21,7 @@ export interface Player {
   id: string;
   name: string; // Sanitized uppercase/trimmed A-Z
   joinedAt: number;
+  joinSequence?: number;
   connected: boolean;
   score: number;
   totalResponseTimeMs: number; // Sum of server-measured response time for tie-breaking
