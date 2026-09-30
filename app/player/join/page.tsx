@@ -4,20 +4,20 @@ import React, { useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowRight, Smartphone, ArrowLeft, AlertCircle } from 'lucide-react';
-import { useMockGame } from '@/context/MockGameContext';
+import { useGame } from '@/context/GameContext';
 import { sound } from '@/lib/soundFX';
 import { BlockedGameState } from '@/components/player/BlockedGameState';
 
 function PlayerJoinContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { room } = useMockGame();
+  const { inspectRoom } = useGame();
 
   const [code, setCode] = useState(() => (searchParams?.get('code') || '').toUpperCase().slice(0, 6));
   const [error, setError] = useState<string | null>(null);
   const [isBlocked, setIsBlocked] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const clean = code.trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
     
@@ -27,19 +27,9 @@ function PlayerJoinContent() {
       return;
     }
 
-    // Verify room existence
-    if (room.code !== clean) {
-      sound.playError();
-      setError(`Room "${clean}" tidak ditemukan. Pastikan kode sama dengan yang tampil di proyektor host.`);
-      return;
-    }
-
-    // Check if room is already active/started (Blocked State)
-    if (room.stage !== 'LOBBY') {
-      sound.playError();
-      setIsBlocked(true);
-      return;
-    }
+    const result = await inspectRoom(clean);
+    if (!result.success) { setError(result.error); return; }
+    if (result.data.stage !== 'LOBBY') { setError('Game sudah dimulai. Tidak dapat bergabung.'); return; }
 
     sound.playSuccess();
     setError(null);
@@ -47,22 +37,6 @@ function PlayerJoinContent() {
     router.push(`/player/name?room=${clean}`);
   };
 
-  if (isBlocked) {
-    return (
-      <BlockedGameState
-        roomCode={code.toUpperCase()}
-        stage={room.stage}
-        onRetry={() => {
-          if (room.stage === 'LOBBY') {
-            setIsBlocked(false);
-            setError(null);
-          } else {
-            sound.playError();
-          }
-        }}
-      />
-    );
-  }
 
   return (
     <div className="w-full max-w-sm flex flex-col gap-6">
@@ -132,10 +106,6 @@ function PlayerJoinContent() {
           <span>Lanjut ke Nama</span>
           <ArrowRight className="w-4 h-4" />
         </button>
-
-        <p className="text-[11px] text-[#8b93a1] text-center font-space">
-          Demo Room Aktif: <strong className="text-[#ffc880]">{room.code}</strong>
-        </p>
       </form>
 
       <div className="text-center">
