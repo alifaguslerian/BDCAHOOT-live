@@ -81,6 +81,12 @@ export function createSocketServer(http: HttpServer, options: Options) {
       return session;
     }));
     socket.on('room:inspect', (payload, ack) => handle(socket, ack, () => engine.inspect(payload?.code)));
+    socket.on('room:leave', (_payload, ack) => handle(socket, ack, () => {
+      if (!socket.data.credentials) return undefined;
+      engine.leave(credentials(socket));
+      socket.data.credentials = undefined;
+      return undefined;
+    }));
     socket.on('room:join', (payload, ack) => handle(socket, ack, () => {
       const session = engine.join(payload?.code, payload?.name, payload?.requestId);
       bind(socket, session);
@@ -94,6 +100,7 @@ export function createSocketServer(http: HttpServer, options: Options) {
     socket.on('host:command', (payload, ack) => handle(socket, ack, () => {
       const session = engine.command(credentials(socket), payload);
       if (session) bind(socket, session);
+      if (payload.action === 'reset') socket.data.credentials = undefined;
       return session;
     }));
     socket.on('clock:ping', (_payload, ack) => {
@@ -118,7 +125,7 @@ export function createSocketServer(http: HttpServer, options: Options) {
         else socket.emit('room:count', { sessionId: view.sessionId, questionIndex: view.currentQuestionIndex, count: view.answeredCount });
       } catch {
         socket.data.credentials = undefined;
-        socket.emit('session:ended', 'Room berakhir atau sesi pemain tidak berlaku lagi.');
+        socket.emit('session:ended', 'Room berakhir atau sesi pemain tidak berlaku lagi.', session.sessionId, session.playerId);
       }
     }
     dirtyRooms.clear(); dirtyCounts.clear();

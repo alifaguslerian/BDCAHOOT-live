@@ -137,6 +137,17 @@ export class GameEngine {
     const {room,identity}=this.authenticate(credentials);
     return {code:room.code,sessionId:room.sessionId,token:credentials.token,...identity};
   }
+  leave(credentials: SessionCredentials): void {
+    const {room,identity} = this.authenticate(credentials);
+    if (identity.role !== 'player' || !identity.playerId) throw new Error('Host harus menutup room melalui kontrol Host.');
+    if (room.stage !== 'LOBBY' && room.stage !== 'FINAL') throw new Error('Permainan sedang berlangsung. Sesi tetap disimpan untuk reconnect.');
+    for (const [token, value] of room.tokens) if (value.playerId === identity.playerId) room.tokens.delete(token);
+    if (room.stage === 'LOBBY') {
+      delete room.players[identity.playerId];
+      room.rankings = calculateRankings(room.players);
+    }
+    this.changed(room);
+  }
   view(credentials: SessionCredentials): RoomView {
     const {room,identity}=this.authenticate(credentials);
     const current=room.questions[room.index];
