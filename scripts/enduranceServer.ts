@@ -10,8 +10,15 @@ export interface Sample {
 
 async function main() {
   if (!process.send || !process.env.ENDURANCE_HOST_KEY) throw Error('Run through npm run test:endurance.');
-  const http = createServer();
+  const app = process.env.ENDURANCE_BROWSER === '1'
+    ? (await import('next')).default({ dev: false, hostname: '127.0.0.1' }) : null;
+  await app?.prepare();
+  const handler = app?.getRequestHandler();
+  const http = createServer((req, res) => { if (handler) void handler(req, res); else res.end(); });
   const service = createSocketServer(http, { hostKey: process.env.ENDURANCE_HOST_KEY });
+  if (app) http.on('upgrade', (req, socket, head) => {
+    if (!req.url?.startsWith('/socket.io/')) void app.getUpgradeHandler()(req, socket, head);
+  });
   const histogram = monitorEventLoopDelay({ resolution: 10 });
   histogram.enable();
   const started = performance.now();
@@ -35,6 +42,7 @@ async function main() {
     if (closing) return;
     closing = true; clearInterval(interval); sample(); histogram.disable();
     await service.close();
+    await app?.close();
     process.disconnect?.();
   };
   process.on('message', (message: { type: string; phase?: string }) => {
