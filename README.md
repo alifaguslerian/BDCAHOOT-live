@@ -72,6 +72,35 @@ Run ini tidak menjalankan Next.js/rendering browser, tidak mengukur UI freezing,
 dan tidak merepresentasikan 100 HP atau router lokasi. Proses terpisah masih berbagi
 CPU mesin yang sama. Profil UI dan rehearsal perangkat nyata tetap wajib.
 
+Profil UI produksi dan pengulangan siklus room:
+
+```sh
+python -m pip install --target reports/python playwright==1.63.0
+npm run build
+npm run test:endurance -- --browser --players=100 --questions=40 --seconds=15 --report=reports/endurance-ui-100x40.json
+npm run test:endurance -- --players=100 --questions=2 --rounds=5 --report=reports/endurance-lifecycle.json
+```
+
+Mode browser membutuhkan Python dan Google Chrome terpasang. Script Python memakai
+Playwright dari `reports/python`; tidak ada dependensi browser testing dalam bundle
+aplikasi. Server menjalankan Next.js produksi bersama Socket.io. Dari 100 pemain,
+99 adalah bot dan satu pemain memakai halaman browser 390×844; Host memakai halaman
+1440×900. Satu socket Host tambahan mengamati state untuk pemeriksaan konsistensi.
+Browser Host benar-benar menekan Start/Lanjut/Podium, dan pemain browser mengklik
+jawaban pada semua soal. Viewport kecil bukan emulasi kemampuan perangkat fisik.
+
+CPU renderer pemain diperlambat 4×; ubah melalui variabel lingkungan
+`ENDURANCE_CPU_RATE` bila diperlukan. Timer/rendering background browser dinonaktifkan
+throttling-nya agar kedua halaman tetap dirender. Ini menguji beban UI aktif, bukan
+suspensi aplikasi di HP. Laporan `.browser.json` mencatat long tasks, jeda frame,
+Event Timing, heap/DOM/listener pada scoreboard, error JavaScript, overflow horizontal,
+dan waktu aksi Playwright sampai teks konfirmasi tampil. Waktu aksi ini mencakup
+driver/polling, bukan INP atau latensi jaringan murni. GC dipaksa hanya pada browser
+setelah semua pengukuran pertandingan untuk diagnostik objek yang masih tertahan;
+tidak ada forced GC server atau saat pertandingan. Screenshot adalah bukti tambahan,
+bukan pengganti metrik. Mode `--rounds` membuat/menutup beberapa room dalam proses
+server yang sama dan mencatat kondisi setelah setiap cleanup.
+
 ## Struktur
 
 - server/gameEngine.ts: validasi, state machine, deadline monoton, scoring, proyeksi data.
