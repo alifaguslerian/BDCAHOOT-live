@@ -40,6 +40,38 @@ npm audit
 
 Tes mengimpor engine produksi dan menjalankan Socket.io sungguhan: 100 koneksi x 40 soal, retry, reconnect, isolasi sesi dan skor yang dihitung independen. Clock soal dipercepat dalam tes; ACK diukur memakai waktu nyata. Hasil loopback bukan pengganti rehearsal dengan perangkat/access point lokasi acara.
 
+### Endurance dengan jam nyata (8C)
+
+```sh
+npm run test:endurance
+npm run test:endurance -- --players=100 --questions=40 --seconds=15 --report=reports/endurance-15s.json
+```
+
+Default: 100 pemain plus satu Host, 40 soal, 5 detik menjawab, 4 detik pembahasan,
+dan 1 detik scoreboard; sekitar 7 menit tanpa percepatan jam. Contoh kedua memakai
+15 detik menjawab dan berlangsung sekitar 14 menit. Jalankan tanpa build atau tes
+lain bersamaan untuk mengurangi gangguan pada pengukuran.
+
+Script membuka server Socket.io/engine produksi pada port loopback acak dalam proses
+Node terpisah dari pembangkit pemain. Tidak perlu menyalakan aplikasi terlebih dahulu.
+Setiap soal mengirim satu burst jawaban serentak, menunggu scoreboard diterima semua
+pemain, lalu memeriksa riwayat jawaban dan skor final. Setelah reset, jumlah room dan
+socket harus nol. Error, timeout, disconnect tak terduga, atau skor tidak konsisten
+menghasilkan exit code nonzero; kegagalan saat run juga dicatat dalam laporan.
+
+`reports/endurance.json` menyimpan sampel CPU, RSS, heap, external memory, event-loop
+delay per detik serta persentil ACK. Folder reports diabaikan Git. CPU memakai skala
+100% = satu core penuh, bukan persentase seluruh mesin. P99 event loop pada ringkasan
+adalah nilai tertinggi di antara jendela sampel, bukan p99 gabungan. Resolusi monitor
+event loop 10 ms. RSS/heap adalah nilai yang tersampel, sehingga lonjakan singkat dapat
+terlewat. Tidak ada forced GC; heap yang tidak langsung turun setelah reset sendiri
+bukan bukti kebocoran. Status `passed` berarti alur dan konsistensi lolos, bukan lolos
+ambang performa universal.
+
+Run ini tidak menjalankan Next.js/rendering browser, tidak mengukur UI freezing,
+dan tidak merepresentasikan 100 HP atau router lokasi. Proses terpisah masih berbagi
+CPU mesin yang sama. Profil UI dan rehearsal perangkat nyata tetap wajib.
+
 ## Struktur
 
 - server/gameEngine.ts: validasi, state machine, deadline monoton, scoring, proyeksi data.
