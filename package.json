@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit --incremental false",
     "test": "node --import tsx --test tests/*.test.ts",
     "test:all": "npm run test",
-    "test:perf": "node --import tsx --test tests/socket.test.ts"
+    "test:perf": "node --import tsx --test tests/socket.test.ts",
+    "test:endurance": "node --import tsx scripts/endurance.ts"
   },
   "dependencies": {
     "clsx": "^2.1.1",
