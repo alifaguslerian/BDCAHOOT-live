@@ -90,3 +90,90 @@ mutation was performed.
 Still pending in 8C: browser/UI profiling and longer representative match durations.
 Physical-phone Wi-Fi/background rehearsal and process-crash recovery also remain
 pending. This is not a 100-phone benchmark or a deployment-readiness certification.
+
+## 1 October 2026 — penyelesaian verifikasi lokal 8C
+
+### Production browser and longer match
+
+`npm run test:endurance -- --browser --players=100 --questions=40 --seconds=15 --report=reports/endurance-ui-100x40.json`
+
+Started 11:03:01 WIB. Exit 0 after 885.35 seconds (14 minutes 45 seconds).
+This run loads the production Next.js build and Socket.io in the measured server
+process. It uses 99 socket bots plus one actual headless Chrome player page, a Chrome
+Host page, and one extra Host observer socket. There are 100 registered players,
+not 100 browser tabs or phones. Chrome 154.0.8037.58 runs on the same Windows laptop;
+player viewport is 390×844 with 4× renderer CPU throttling, Host viewport 1440×900.
+Background throttling is disabled for these active-page rendering measurements.
+
+The Host clicks Start and all Continue/Podium buttons through the UI. The browser
+player clicks answer B on every question and waits for the confirmed-answer text.
+All 40 scoreboards and final state are reached, 3,960 bot answers plus 40 browser
+answers are accepted, and all player histories/totals are checked. The browser
+player's final screenshot shows 40/40 correct answers and 78,198 points. There are
+zero unexpected observer/bot disconnects, JavaScript page errors, console errors,
+or horizontal overflow in the sampled scoreboards. No concurrent build/test command
+ran during this full measurement.
+
+| Measurement | Host | Player (CPU 4×) |
+| --- | --- | --- |
+| Long tasks (>50 ms), count / maximum | 0 / none observed | 5 / 114 ms |
+| Frame interval p95 / maximum | 16.80 / 83.30 ms | 16.80 / 133.40 ms |
+| Observed Event Timing entries p95 / maximum | 32 / 48 ms | 48 / 112 ms |
+| Sampled scoreboard JS heap range | 5.39–8.81 MiB | 4.90–6.03 MiB |
+| Post-game heap after diagnostic GC | 5.80 MiB | 5.26 MiB |
+| Post-game DOM nodes / JS event listeners after diagnostic GC | 241 / 311 | 130 / 312 |
+
+Player automation action-to-confirmed-DOM time: p95 100.47 ms, maximum 146.94 ms
+over 40 actions. It includes Playwright driver/actionability/polling overhead and is
+not network RTT or INP. Event Timing only records qualifying observed entries; it
+is not a page-level INP assessment. Frame/long-task probes start after lobby setup.
+There were measurable short stalls, so this does not establish zero lag.
+
+Server during the game: average CPU 0.75% of one core, peak sampled RSS 229.23 MiB,
+peak sampled heap 79.08 MiB, bot ACK p95/p99 4.10/7.30 ms, event-loop maximum delay
+45.74 ms. Server heap after reset was 69.41 MiB versus 57.03 MiB baseline; room/socket
+counts were zero. These numbers include Next.js and use longer idle periods between
+answers, so they are not an optimization comparison with the earlier engine-only run.
+No server GC was forced. Browser GC was forced only after the match/timing capture,
+as a separate retention diagnostic. The raw report's scope shorthand "no forced GC"
+refers to server/match execution; its browserReport explicitly records that diagnostic.
+
+Browser reports and screenshots are under `reports/`, ignored by Git. Initial
+screenshots captured entry animations before completion; the harness now waits for
+those animations and explicitly checks the Host podium page before capture. This is
+a test-evidence correction, not a production rendering change.
+The subsequent three-player/two-question visual check passed, and the captured
+Host screenshot after the wait shows all three podium places. Browser heap figures
+include the lightweight measurement probes themselves.
+
+### Repeated room lifecycle
+
+`npm run test:endurance -- --players=100 --questions=2 --rounds=5 --report=reports/endurance-lifecycle.json`
+
+Exit 0 after 132.36 seconds. Five distinct room lifecycles run in one engine/Socket.io
+process, with 100 players and two real-duration questions per room: 1,000 answers
+total, no unexpected disconnects, and zero rooms/sockets after every reset/disconnect.
+This complements the 40-question runs; each lifecycle round is not a 40-question match.
+
+| Cleanup after round | Heap MiB | Rooms | Sockets |
+| --- | --- | --- | --- |
+| 1 | 19.52 | 0 | 0 |
+| 2 | 14.34 | 0 | 0 |
+| 3 | 14.45 | 0 | 0 |
+| 4 | 27.96 | 0 | 0 |
+| 5 | 18.14 | 0 | 0 |
+
+Heap was not monotonically increasing across these cleanup samples; RSS still grew
+overall. No forced server GC or heap-snapshot retainer analysis was performed, so
+this is bounded evidence of cleanup, not proof that every leak is absent.
+
+Local 8C coverage is complete for the documented scenarios. Next implementation phase
+is 9A persistence. Physical 50–100 phone/router rehearsal, real mobile suspension,
+different hardware/browsers and process-crash recovery remain separate unverified
+acceptance conditions. No Git mutation was performed.
+
+Final checks after these harness changes: 26/26 regression tests, typecheck, lint,
+and production build passed. Lint initially scanned third-party Playwright files in
+reports/python; reports is now excluded from both ESLint and TypeScript project
+inputs, and both checks were rerun successfully. The existing Node module.register
+deprecation and localStorage experimental warnings remain non-fatal.
