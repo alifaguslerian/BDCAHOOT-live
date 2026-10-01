@@ -28,7 +28,7 @@ rendering 100 HP, interferensi Wi-Fi, atau jaminan bebas kebocoran memori.
 | --- | --- | --- |
 | 8A: mute, status, keluar/masuk | Perbaikan utama lolos tes otomatis dan browser lokal | Mute lintas efek dan refresh; keluar lobby membebaskan nama; navigasi keluar tidak ditimpa redirect sesi |
 | 8B: gangguan koneksi | Perbaikan dan simulasi otomatis lokal lolos | ACK join/resume/jawaban hilang, reconnect berulang, jawaban terlambat, ACK soal lama, dan pemulihan saat halaman aktif; layar terkunci/background pada HP masih perlu diuji |
-| 8C: ketahanan | Berikutnya | 100 klien × 40 soal dengan durasi nyata; ukur CPU, memori, latensi dan UI |
+| 8C: ketahanan | Endurance server lokal lolos; profil UI belum | 100 pemain + Host × 40 soal, sekitar 7 menit jam nyata, CPU/memori/latensi terukur; profil rendering, sesi lebih panjang, dan perangkat LAN masih perlu |
 | 9A: penyimpanan pertandingan | Belum | Simpan progres terkonfirmasi dan tentukan aturan melanjutkan soal setelah crash |
 | 9B: pemulihan dan keamanan | Belum | Uji restart, konsistensi skor, token, spam, dan paket rusak |
 | Persiapan dan rehearsal acara | Belum | Panduan operasional serta uji 50–100 HP pada router lokasi |
