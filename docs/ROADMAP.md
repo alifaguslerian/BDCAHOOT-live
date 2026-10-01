@@ -28,12 +28,15 @@ rendering 100 HP, interferensi Wi-Fi, atau jaminan bebas kebocoran memori.
 | --- | --- | --- |
 | 8A: mute, status, keluar/masuk | Perbaikan utama lolos tes otomatis dan browser lokal | Mute lintas efek dan refresh; keluar lobby membebaskan nama; navigasi keluar tidak ditimpa redirect sesi |
 | 8B: gangguan koneksi | Perbaikan dan simulasi otomatis lokal lolos | ACK join/resume/jawaban hilang, reconnect berulang, jawaban terlambat, ACK soal lama, dan pemulihan saat halaman aktif; layar terkunci/background pada HP masih perlu diuji |
-| 8C: ketahanan | Endurance server lokal lolos; profil UI belum | 100 pemain + Host × 40 soal, sekitar 7 menit jam nyata, CPU/memori/latensi terukur; profil rendering, sesi lebih panjang, dan perangkat LAN masih perlu |
+| 8C: ketahanan | Verifikasi lokal selesai | Engine 100 bot × 40 soal; Next.js produksi + UI Host/pemain + 99 bot × 40 soal selama 14m45s, CPU pemain 4×; lima siklus room dan cleanup lolos. Rehearsal HP/router tetap gerbang penerimaan acara |
 | 9A: penyimpanan pertandingan | Belum | Simpan progres terkonfirmasi dan tentukan aturan melanjutkan soal setelah crash |
 | 9B: pemulihan dan keamanan | Belum | Uji restart, konsistensi skor, token, spam, dan paket rusak |
 | Persiapan dan rehearsal acara | Belum | Panduan operasional serta uji 50–100 HP pada router lokasi |
 
 Hasil 8A dan simulasi 8B tidak berarti seluruh UI telah selesai diaudit atau seluruh Fase 8 siap acara.
+Selesai lokal pada 8C berarti skenario otomatis dan profil pada mesin pengujian lolos;
+bukan 100 HP sudah diuji atau jaminan tanpa lag/kebocoran memori. Tahap implementasi
+berikutnya adalah 9A. Uji perangkat/router tetap dicatat pada rehearsal acara.
 Jumlah peserta Host adalah peserta terdaftar, bukan pengukuran jumlah socket yang sedang online.
 
 ## Penyimpanan pertandingan
