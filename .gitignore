@@ -5,6 +5,7 @@ node_modules/
 
 # Testing & Coverage
 /coverage
+/reports/
 
 # Next.js build output
 /.next/
