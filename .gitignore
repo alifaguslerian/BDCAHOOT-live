@@ -6,6 +6,10 @@ node_modules/
 # Testing & Coverage
 /coverage
 /reports/
+/data/
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
 
 # Next.js build output
 /.next/
