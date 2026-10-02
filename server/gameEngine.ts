@@ -239,5 +239,24 @@ export class GameEngine {
   }
   roomCodes(): string[] {return [...this.rooms.keys()];}
   serverTime(): number {return this.now();}
+  snapshot(): Map<string, Room> { return structuredClone(this.rooms); }
+  restore(snapshot: unknown): void {
+    if (!(snapshot instanceof Map) || snapshot.size > 100) throw Error('Snapshot room tidak valid.');
+    const rooms = structuredClone(snapshot) as Map<string, Room>;
+    for (const [code, room] of rooms) {
+      if (!/^[A-Z0-9]{6}$/.test(code) || code !== room.code || typeof room.sessionId !== 'string'
+        || !Number.isFinite(room.touched) || !Number.isInteger(room.revision)
+        || !['LOBBY', 'QUESTION', 'REVEAL', 'SCOREBOARD', 'FINAL'].includes(room.stage)
+        || !(room.tokens instanceof Map) || !(room.receipts instanceof Map) || !(room.joins instanceof Map)
+        || !room.players || Object.keys(room.players).length > 150 || !Array.isArray(room.rankings)) throw Error('Snapshot room tidak valid.');
+      parseQuiz({ title: room.title, questions: room.questions });
+      if (!Number.isInteger(room.index) || room.index < -1 || room.index >= room.questions.length
+        || (!['LOBBY', 'FINAL'].includes(room.stage) && room.index < 0)) throw Error('Posisi soal snapshot tidak valid.');
+      if (this.now() - room.touched > TTL) { rooms.delete(code); continue; }
+      if (room.stage === 'QUESTION') this.reveal(room, this.now());
+      if (room.stage === 'REVEAL') { room.stage = 'SCOREBOARD'; this.changed(room); }
+    }
+    this.rooms = rooms;
+  }
   close(): void {this.rooms.clear();}
 }
