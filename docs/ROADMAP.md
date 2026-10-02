@@ -1,6 +1,6 @@
 # Status implementasi BDCAHOOT Live
 
-Diperbarui 1 Oktober 2026.
+Diperbarui 2 Oktober 2026.
 
 Fase 1–7 menghasilkan UI dan prototipe antar-tab. MockGameContext, BroadcastChannel,
 grid simulator, dan skrip tes yang menyalin logika aplikasi sudah diganti.
@@ -29,20 +29,22 @@ rendering 100 HP, interferensi Wi-Fi, atau jaminan bebas kebocoran memori.
 | 8A: mute, status, keluar/masuk | Perbaikan utama lolos tes otomatis dan browser lokal | Mute lintas efek dan refresh; keluar lobby membebaskan nama; navigasi keluar tidak ditimpa redirect sesi |
 | 8B: gangguan koneksi | Perbaikan dan simulasi otomatis lokal lolos | ACK join/resume/jawaban hilang, reconnect berulang, jawaban terlambat, ACK soal lama, dan pemulihan saat halaman aktif; layar terkunci/background pada HP masih perlu diuji |
 | 8C: ketahanan | Verifikasi lokal selesai | Engine 100 bot × 40 soal; Next.js produksi + UI Host/pemain + 99 bot × 40 soal selama 14m45s, CPU pemain 4×; lima siklus room dan cleanup lolos. Rehearsal HP/router tetap gerbang penerimaan acara |
-| 9A: penyimpanan pertandingan | Belum | Simpan progres terkonfirmasi dan tentukan aturan melanjutkan soal setelah crash |
-| 9B: pemulihan dan keamanan | Belum | Uji restart, konsistensi skor, token, spam, dan paket rusak |
+| 9A: penyimpanan pertandingan | Implementasi dan verifikasi lokal selesai | SQLite worker, ACK setelah commit; 100 ACK serentak bertahan setelah process kill; 100 pemain × 40 soal dengan persistence lolos; soal aktif pulih ke scoreboard |
+| 9B: pemulihan dan keamanan | Berikutnya | Perluas gangguan saat commit, disk lambat/penuh, pergantian koneksi, konsistensi skor, token, spam, dan paket rusak |
 | Persiapan dan rehearsal acara | Belum | Panduan operasional serta uji 50–100 HP pada router lokasi |
 
 Hasil 8A dan simulasi 8B tidak berarti seluruh UI telah selesai diaudit atau seluruh Fase 8 siap acara.
 Selesai lokal pada 8C berarti skenario otomatis dan profil pada mesin pengujian lolos;
 bukan 100 HP sudah diuji atau jaminan tanpa lag/kebocoran memori. Tahap implementasi
-berikutnya adalah 9A. Uji perangkat/router tetap dicatat pada rehearsal acara.
+berikutnya setelah 9A adalah 9B. Uji perangkat/router tetap dicatat pada rehearsal acara.
 Jumlah peserta Host adalah peserta terdaftar, bukan pengukuran jumlah socket yang sedang online.
 
 ## Penyimpanan pertandingan
 
-State pertandingan masih di memori. Refresh browser dapat pulih; restart server
-menghapus room. Penyimpanan snapshot pertandingan belum diimplementasikan.
+Server normal menyimpan snapshot ke SQLite lokal. Refresh dan restart dapat memulihkan
+room yang belum kedaluwarsa dengan database dan token browser yang sama. Soal yang
+aktif saat restart ditutup ke scoreboard; Host melanjutkan secara manual. Database
+berisi rahasia sesi dan harus dilindungi. Lihat README untuk operasi/backup.
 Editor menyimpan kuis di localStorage browser Host.
 
 Lihat README.md untuk menjalankan server dan batas operasional, SECURITY.md untuk
