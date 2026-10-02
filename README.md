@@ -20,13 +20,47 @@ Pengembangan: `npm run dev`. `PORT` mengubah port; `HOST_KEY` menetapkan kode op
 
 ## Batas operasional
 
-- Satu proses server memiliki state dalam memori. Refresh browser aman; restart proses menghapus room. Jangan tutup terminal atau biarkan laptop tidur saat pertandingan.
+- Server menyimpan pertandingan ke SQLite lokal (`data/game.sqlite`, dapat diubah lewat `DATABASE_PATH`). Satu proses server per database. Jangan menutup terminal atau membiarkan laptop tidur saat pertandingan; restart akan mengakhiri soal yang sedang aktif dan memulihkannya ke scoreboard.
 - Reconnect memulihkan sesi pada tab yang sama melalui sessionStorage. Menutup tab atau menghapus penyimpanan dapat menghilangkan identitas pemain.
 - Batas: 150 pemain/room, 200 soal/kuis, payload kuis maksimal 200 KiB, 16 room aktif. Room kedaluwarsa setelah enam jam tanpa aktivitas terautentikasi.
 - Firewall perlu mengizinkan port server di jaringan privat. Wi-Fi guest dengan client isolation dapat menghalangi akses ke laptop.
 - HTTP lokal ditujukan untuk LAN tepercaya. Tidak melindungi token dari penyadap jaringan; gunakan TLS untuk jaringan tidak tepercaya. Jangan expose langsung ke Internet.
 - Gameplay tidak bergantung Internet. Google Fonts opsional dengan fallback font lokal.
 - Ranking: skor, total durasi jawaban server, lalu urutan bergabung. Latensi Wi-Fi ikut memengaruhi waktu penerimaan; nol delay tidak dijanjikan.
+
+## Pemulihan pertandingan (9A)
+
+ACK sukses untuk perubahan permainan baru dikirim setelah transaksi SQLite selesai.
+Penulisan berjalan di worker dan perubahan yang berdekatan dapat digabung dalam satu
+snapshot. Server menyimpan room, urutan soal, token Host/pemain, jawaban, receipt retry,
+skor, urutan bergabung, dan penghapusan room. Snapshot tidak dikirim ke browser.
+
+Setelah restart dengan database yang sama:
+
+- LOBBY, SCOREBOARD dan FINAL kembali ke tahap tersimpan.
+- QUESTION/REVEAL dipulihkan ke SCOREBOARD soal tersebut. Jawaban tersimpan tetap
+  dihitung, pemain yang belum menjawab tidak mendapat poin, dan penalti waktu untuk
+  tie-break diterapkan satu kali. Host melanjutkan ke soal berikutnya secara manual.
+- Pemain/Host kembali memakai URL, origin dan tab yang sama, dengan sessionStorage
+  masih ada. Token/kode room tetap berlaku untuk room yang belum kedaluwarsa. Database
+  tidak mengembalikan token browser yang sudah dihapus. HOST_KEY yang tetap memudahkan
+  retry pembuatan room setelah restart; token Host room lama tidak bergantung key baru.
+- Room tanpa aktivitas tetap kedaluwarsa setelah enam jam. Aktivitas terakhir disimpan
+  secara periodik (sekitar 30 detik di luar waktu penulisan), juga ketika ada perubahan game
+  dan saat shutdown normal.
+
+Jika disk gagal ditulis, server memutus koneksi permainan, menolak koneksi baru dan
+menampilkan error di terminal. Perbaiki penyimpanan lalu restart; jangan menghapus
+database untuk menghilangkan error. Database rusak atau versi tidak didukung membuat
+startup gagal tanpa menggantinya dengan pertandingan kosong.
+
+Gunakan disk lokal yang andal, bukan folder jaringan/cloud-sync. Lindungi folder data
+dengan izin akun operator (terutama ACL Windows); database menyimpan rahasia sesi dan
+kunci jawaban dalam bentuk tidak terenkripsi. Jangan taruh di `public`, commit,
+unggah, atau bagikan kepada pemain. Untuk backup sederhana, hentikan server normal
+lalu salin database; simpan backup aman sebelum upgrade aplikasi/Node. Recovery sudah
+diuji terhadap process kill setelah ACK, bukan terhadap pencabutan listrik atau disk
+rusak secara fisik. Durabilitas tetap bergantung filesystem/perangkat menghormati sync.
 
 ## Verifikasi
 
@@ -79,6 +113,7 @@ python -m pip install --target reports/python playwright==1.63.0
 npm run build
 npm run test:endurance -- --browser --players=100 --questions=40 --seconds=15 --report=reports/endurance-ui-100x40.json
 npm run test:endurance -- --players=100 --questions=2 --rounds=5 --report=reports/endurance-lifecycle.json
+npm run test:endurance -- --players=100 --questions=40 --database=reports/durable-test.sqlite --report=reports/durable-test.json
 ```
 
 Mode browser membutuhkan Python dan Google Chrome terpasang. Script Python memakai
@@ -100,6 +135,9 @@ setelah semua pengukuran pertandingan untuk diagnostik objek yang masih tertahan
 tidak ada forced GC server atau saat pertandingan. Screenshot adalah bukti tambahan,
 bukan pengganti metrik. Mode `--rounds` membuat/menutup beberapa room dalam proses
 server yang sama dan mencatat kondisi setelah setiap cleanup.
+Tambahkan `--database` untuk memasukkan biaya persistence seperti server normal.
+Tanpa opsi ini, harness memakai memori saja. Gunakan database pengujian terpisah;
+jangan arahkan benchmark ke database pertandingan acara.
 
 ## Struktur
 
