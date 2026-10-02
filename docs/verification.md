@@ -251,3 +251,44 @@ storage-stall/failure and malicious-input testing; physical router/phone rehears
 and hardware power-loss testing remain unverified. Default database path is
 data/game.sqlite; protect its tokens/answer keys and backups. Operations and recovery
 policy are documented in README and SECURITY. No commit, push or branch mutation.
+
+## Phase 9B — recovery and adversarial transport (2 October 2026)
+
+Found and reproduced: while persistence was stalled, valid requests accumulated
+waiting for flush with no deadline or in-flight limit. The regression test initially
+failed with zero rejected requests out of a 40-request burst behind a stalled write.
+The server now caps pending handlers at eight per connection and 1,000 globally,
+rejects excess before mutation, and stops transports after a five-second commit timeout.
+No successful ACK is emitted for the timed-out pending operation.
+
+Verification: `npm test` passed 39/39; `npm run typecheck`, `npm run lint`, and
+`npm run build` passed. Expected injected storage-failure logs appear in tests.
+Node emitted its existing module.register deprecation warning during build.
+
+New cases:
+- A held persistence write plus 40 requests triggers backpressure, then disconnects
+  with no successful ACK. Fault injection uses the production Persistence interface.
+- A real child server is killed after a join reaches persistence but before it is
+  written. Restart preserves the previous committed room and omits that unconfirmed join.
+- A separate SQLite writer changes the real snapshot row in an open transaction
+  using DELETE journal/FULL sync and a small cache, then is killed. Production
+  SnapshotStore reopens the database and retrieves the previous committed bytes.
+  This exercises hot-journal rollback, not every timing point inside COMMIT itself.
+- Two connections sharing one player token submit conflicting answers: exactly one
+  succeeds. Kick revokes the token on both connections; reconnect cannot restore it.
+- A burst of 400 malformed resume packets is rejected/rate-limited while another
+  connection can create and resume a room.
+- A foreign Origin handshake is rejected; a 300 KiB packet disconnects its sender
+  while another connection remains usable.
+
+Existing tests also reran: injected write rejection (disk-full equivalent at the
+interface), 100 confirmed answers surviving process kill, idempotent receipt retries,
+and 100 sockets × 40 questions with accelerated clock. These runs are correctness
+checks, not a new wall-clock performance benchmark. The 9A performance numbers remain
+historical measurements of that version.
+
+Local 9B acceptance is complete for these scenarios. Physical disk exhaustion,
+hardware power loss, a filesystem call that never returns, coordinated reconnect
+floods, and physical 50–100-phone/router behavior remain outside this verification.
+A late write can commit after its timeout; recovery uses persisted state, not an
+assumption that missing ACK means lost data. No Git mutations were performed.
