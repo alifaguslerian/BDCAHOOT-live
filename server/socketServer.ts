@@ -2,14 +2,19 @@ import type { Server as HttpServer } from 'node:http';
 import { timingSafeEqual, createHash } from 'node:crypto';
 import { Server, type Socket } from 'socket.io';
 import { GameEngine } from './gameEngine';
+import { serialize, deserialize } from 'node:v8';
+import type { Persistence } from './persistence';
 import type { ClientEvents, ServerEvents, SessionCredentials, Reply } from '../types/network';
 
 interface ConnectionData { credentials?: SessionCredentials; tokens: number; refillAt: number }
 type GameSocket = Socket<ClientEvents, ServerEvents, Record<string, never>, ConnectionData>;
-interface Options { hostKey: string; now?: () => number }
+interface Options { hostKey: string; now?: () => number; persistence?: Persistence }
 
 export function createSocketServer(http: HttpServer, options: Options) {
   if (options.hostKey.length < 12) throw Error('HOST_KEY minimal 12 karakter.');
+  let generation = 0, committed = 0;
+  let storageFailure: Error | undefined, closing = false, publishing = false;
+  let writing: Promise<void> | undefined;
   const io = new Server<ClientEvents, ServerEvents, Record<string, never>, ConnectionData>(http, {
     maxHttpBufferSize: 256 * 1024,
     perMessageDeflate: false,
@@ -17,20 +22,60 @@ export function createSocketServer(http: HttpServer, options: Options) {
       const origin = req.headers.origin;
       let allowed = !origin;
       try { allowed ||= new URL(origin!).host === req.headers.host; } catch { /* invalid origin */ }
-      callback(null, allowed && io.engine.clientsCount < 1000);
+      callback(null, allowed && !storageFailure && !closing && io.engine.clientsCount < 1000);
     },
   });
   const dirtyRooms = new Set<string>();
   const dirtyCounts = new Set<string>();
   const engine = new GameEngine({ now: options.now,
-    onChange: code => dirtyRooms.add(code), onAnswer: code => dirtyCounts.add(code) });
+    onChange: code => { generation++; dirtyRooms.add(code); },
+    onAnswer: code => { generation++; dirtyCounts.add(code); } });
   // All LAN clients may share an address. Limit expensive failed operator authentication separately.
   const operatorFailures = new Map<string, { count: number; expires: number }>();
   const creations = new Map<string, { fingerprint: string; credentials: SessionCredentials }>();
+  if (options.persistence?.initial) {
+    try {
+      const saved = deserialize(options.persistence.initial);
+      if (saved?.version !== 1 || !(saved.creations instanceof Map) || saved.creations.size > 16) throw Error('Versi snapshot tidak didukung.');
+      engine.restore(saved.rooms);
+      for (const [id, entry] of saved.creations) {
+        if (typeof id !== 'string' || typeof entry?.fingerprint !== 'string' || !entry.credentials) throw Error('Snapshot pembuatan room tidak valid.');
+        if (engine.roomCodes().includes(entry.credentials.code)) {
+          engine.resume(entry.credentials);
+          creations.set(id, entry);
+        }
+      }
+      generation++;
+    } catch (error) {
+      void options.persistence.close(); void io.close(); throw error;
+    }
+  }
+
+  async function flush(): Promise<void> {
+    if (!options.persistence) return;
+    while (committed < generation) {
+      if (storageFailure) throw storageFailure;
+      if (!writing) {
+        const version = generation;
+        const codes = new Set(engine.roomCodes());
+        for (const [id, entry] of creations) if (!codes.has(entry.credentials.code)) creations.delete(id);
+        const data = serialize({ version: 1, rooms: engine.snapshot(), creations });
+        writing = options.persistence.save(data).then(() => { committed = version; }).catch(error => {
+          storageFailure = error instanceof Error ? error : Error('Storage failure');
+          console.error('Penyimpanan pertandingan gagal. Permainan dihentikan; periksa disk lalu restart server.');
+          for (const socket of io.sockets.sockets.values()) socket.conn.close();
+          throw storageFailure;
+        }).finally(() => { writing = undefined; });
+      }
+      await writing;
+    }
+    if (storageFailure) throw storageFailure;
+  }
+  const ready = flush();
 
   function bind(socket: GameSocket, credentials: SessionCredentials) {
     socket.data.credentials = engine.resume(credentials);
-    socket.emit('room:state', engine.view(socket.data.credentials));
+    dirtyRooms.add(socket.data.credentials.code);
   }
   function credentials(socket: GameSocket) {
     if (!socket.data.credentials) throw Error('Bergabung ke room terlebih dahulu.');
@@ -44,11 +89,12 @@ export function createSocketServer(http: HttpServer, options: Options) {
     socket.data.tokens--;
     return true;
   }
-  function handle<T>(socket: GameSocket, ack: ((reply: Reply<T>) => void) | undefined, operation: () => T) {
+  async function handle<T>(socket: GameSocket, ack: ((reply: Reply<T>) => void) | undefined, operation: () => T) {
     if (typeof ack !== 'function') return;
+    if (storageFailure || closing) { ack({ success: false, error: 'Penyimpanan tidak tersedia. Tunggu server pulih.', code: 'UNKNOWN' }); return; }
     if (!takeToken(socket)) { ack({ success: false, error: 'Terlalu banyak permintaan. Coba lagi sebentar.', code: 'RATE_LIMIT' }); return; }
-    try { ack({ success: true, data: operation() }); }
-    catch (error) { ack({ success: false, error: error instanceof Error ? error.message : 'Permintaan tidak valid.' }); }
+    try { const data = operation(); await flush(); ack({ success: true, data }); }
+    catch (error) { ack({ success: false, error: storageFailure ? 'Konfirmasi penyimpanan gagal. Tunggu server pulih.' : error instanceof Error ? error.message : 'Permintaan tidak valid.', ...(storageFailure ? { code: 'UNKNOWN' } : {}) }); }
   }
   io.on('connection', socket => {
     socket.data.tokens = 200;
@@ -104,14 +150,23 @@ export function createSocketServer(http: HttpServer, options: Options) {
       return session;
     }));
     socket.on('clock:ping', (_payload, ack) => {
-      if (typeof ack !== 'function' || !takeToken(socket)) return;
+      if (typeof ack !== 'function' || storageFailure || closing || !takeToken(socket)) return;
       const now = engine.serverTime();
       ack({ receivedAt: now, sentAt: engine.serverTime() });
     });
   });
 
-  const interval = setInterval(() => {
-    engine.tick();
+  let lastActivitySave = performance.now();
+  async function publish() {
+    if (publishing || closing || storageFailure) return;
+    publishing = true;
+    try {
+      await flush();
+      broadcast();
+    } catch { /* flush has already stopped the transport on storage failure. */ }
+    finally { publishing = false; }
+  }
+  function broadcast() {
     const activeCodes = new Set(engine.roomCodes());
     for (const [id, value] of creations) if (!activeCodes.has(value.credentials.code)) creations.delete(id);
     for (const [address, failure] of operatorFailures) if (failure.expires <= Date.now()) operatorFailures.delete(address);
@@ -129,10 +184,26 @@ export function createSocketServer(http: HttpServer, options: Options) {
       }
     }
     dirtyRooms.clear(); dirtyCounts.clear();
+  }
+  const interval = setInterval(() => {
+    if (closing || storageFailure) return;
+    engine.tick();
+    if (options.persistence && performance.now() - lastActivitySave >= 30000) {
+      if (engine.roomCodes().length) generation++;
+      lastActivitySave = performance.now();
+    }
+    void publish();
   }, 100);
   interval.unref();
-  return { io, engine, close: async () => {
-    clearInterval(interval); engine.close(); operatorFailures.clear(); creations.clear();
-    await new Promise<void>(resolve => io.close(() => resolve()));
-  } };
+  let closePromise: Promise<void> | undefined;
+  return { io, engine, ready, close: () => closePromise ??= (async () => {
+    closing = true;
+    clearInterval(interval);
+    try { if (!storageFailure) { generation++; await flush(); } }
+    finally {
+      await new Promise<void>(resolve => io.close(() => resolve()));
+      await options.persistence?.close();
+      engine.close(); operatorFailures.clear(); creations.clear();
+    }
+  })() };
 }
