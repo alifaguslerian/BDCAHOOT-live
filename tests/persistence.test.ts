@@ -18,6 +18,27 @@ import type { Reply, RoomView, SessionCredentials } from '../types/network';
 const quiz = { title: 'Recovery', questions: [0, 1].map(i => ({ id: `q${i}`, question: 'Question',
   options: ['A', 'B', 'C', 'D'].map(id => ({ id, text: id })), correctOption: 'B', timerSeconds: 5 })) };
 
+test('SQLite hot journal rolls back an interrupted transaction to the last committed snapshot', { timeout: 10000 }, async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'bdc-journal-'));
+  const path = join(dir, 'game.sqlite');
+  let child: ReturnType<typeof spawn> | undefined;
+  try {
+    const store = await SnapshotStore.open(path);
+    await store.save(Buffer.from('confirmed snapshot')); await store.close();
+    child = spawn(process.execPath, [resolve('tests/helpers/interruptedSqlite.mjs'), path], { stdio: ['ignore', 'ignore', 'inherit', 'ipc'], windowsHide: true });
+    assert.equal((await once(child, 'message'))[0], 'transaction-written');
+    const exited = once(child, 'exit'); child.kill('SIGKILL'); await exited;
+    const recovered = await SnapshotStore.open(path);
+    try { assert.equal(recovered.initial?.toString(), 'confirmed snapshot'); }
+    finally { await recovered.close(); }
+  } finally {
+    if (child && child.exitCode === null && child.signalCode === null) {
+      const exited = once(child, 'exit'); child.kill('SIGKILL'); await exited;
+    }
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('concurrent shutdown calls close the database exactly once', { timeout: 3000 }, async () => {
   const dir = await mkdtemp(join(tmpdir(), 'bdc-close-'));
   try {
@@ -228,6 +249,44 @@ test('successful socket ACK survives closing and reopening storage, including cr
   } finally {
     sockets.forEach(s => s.disconnect());
     for (const service of services) await service.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('crash before pending commit preserves the previous room and never confirms the lost join', { timeout: 15000 }, async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'bdc-pending-crash-'));
+  const path = join(dir, 'game.sqlite');
+  const children: ReturnType<typeof spawn>[] = [], sockets: ReturnType<typeof io>[] = [];
+  async function start() {
+    const child = spawn(process.execPath, ['--import', 'tsx', resolve('tests/helpers/persistenceServer.ts'), path], { stdio: ['ignore', 'ignore', 'inherit', 'ipc'], windowsHide: true });
+    children.push(child);
+    const [message] = await once(child, 'message');
+    const socket = io(message.url, { transports: ['websocket'], reconnection: false });
+    sockets.push(socket); await new Promise<void>((resolve, reject) => { socket.once('connect', resolve); socket.once('connect_error', reject); });
+    return { child, socket };
+  }
+  try {
+    const first = await start();
+    const created = await first.socket.timeout(3000).emitWithAck('room:create', { quiz, hostKey: 'crash-test-operator', requestId: randomUUID() });
+    assert(created.success);
+    const armed = once(first.child, 'message'); first.child.send('hold-next-write');
+    assert.equal((await armed)[0], 'armed');
+    let success = false;
+    const held = once(first.child, 'message');
+    first.socket.emit('room:join', { code: created.data.code, name: 'ANA', requestId: randomUUID() }, (reply: Reply<unknown>) => { success = reply.success; });
+    assert.equal((await held)[0], 'write-held');
+    const exited = once(first.child, 'exit'); first.child.kill('SIGKILL'); await exited;
+    assert.equal(success, false);
+    const second = await start();
+    const resumed = await second.socket.timeout(3000).emitWithAck('session:resume', created.data);
+    assert(resumed.success);
+    assert.equal(resumed.data.stage, 'LOBBY');
+    assert.equal(Object.keys(resumed.data.players).length, 0);
+  } finally {
+    sockets.forEach(socket => socket.disconnect());
+    for (const child of children) if (child.exitCode === null && child.signalCode === null) {
+      const exited = once(child, 'exit'); child.kill('SIGKILL'); await exited;
+    }
     await rm(dir, { recursive: true, force: true });
   }
 });

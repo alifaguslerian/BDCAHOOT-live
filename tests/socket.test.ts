@@ -27,7 +27,7 @@ async function fixture() {
     });
     return socket;
   }
-  return { service, connect, advance: (ms: number) => { time += ms; service.engine.tick(); },
+  return { service, connect, url, advance: (ms: number) => { time += ms; service.engine.tick(); },
     close: async () => { clients.forEach(s => s.disconnect()); await service.close(); } };
 }
 async function request<T>(socket: Socket, event: string, payload: unknown): Promise<T> {
@@ -37,6 +37,59 @@ async function request<T>(socket: Socket, event: string, payload: unknown): Prom
   return reply.data;
 }
 const resume = (socket: Socket, credentials: SessionCredentials) => request<RoomView>(socket, 'session:resume', credentials);
+
+test('foreign browser origin and oversized packets are rejected while healthy clients remain usable', async () => {
+  const f = await fixture();
+  const foreign = io(f.url, { transports: ['websocket'], reconnection: false, extraHeaders: { Origin: 'https://foreign.invalid' } });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      foreign.once('connect_error', () => resolve()); foreign.once('connect', () => reject(Error('Foreign origin accepted')));
+    });
+    const attacker = await f.connect(), healthy = await f.connect();
+    const disconnected = new Promise<void>(resolve => attacker.once('disconnect', () => resolve()));
+    attacker.emit('session:resume', { token: 'x'.repeat(300 * 1024) });
+    await disconnected;
+    const owner = await request<SessionCredentials>(healthy, 'room:create', { quiz, hostKey: 'test-operator-key' });
+    assert.equal((await resume(healthy, owner)).stage, 'LOBBY');
+  } finally { foreign.disconnect(); await f.close(); }
+});
+
+test('malformed packet flood is limited without affecting another connection', async () => {
+  const f = await fixture();
+  try {
+    const attacker = await f.connect(), host = await f.connect();
+    const replies = await Promise.all(Array.from({ length: 400 }, () => attacker.timeout(5000).emitWithAck('session:resume', null)));
+    assert(replies.every(reply => !reply.success));
+    assert(replies.some(reply => reply.code === 'RATE_LIMIT'));
+    const owner = await request<SessionCredentials>(host, 'room:create', { quiz, hostKey: 'test-operator-key' });
+    assert.equal((await resume(host, owner)).stage, 'LOBBY');
+  } finally { await f.close(); }
+});
+
+test('two connections sharing a player token cannot score conflicting answers twice; kick revokes both', async () => {
+  const f = await fixture();
+  try {
+    const host = await f.connect(), first = await f.connect(), second = await f.connect();
+    const owner = await request<SessionCredentials>(host, 'room:create', { quiz, hostKey: 'test-operator-key' });
+    const identity = await request<SessionCredentials>(first, 'room:join', { code: owner.code, name: 'ANA', requestId: randomUUID() });
+    await resume(second, identity);
+    let state = await resume(host, owner);
+    await request(host, 'host:command', { sessionId: owner.sessionId, revision: state.revision, action: 'kick', playerId: identity.playerId });
+    await assert.rejects(resume(first, identity)); await assert.rejects(resume(second, identity));
+    const replacement = await request<SessionCredentials>(first, 'room:join', { code: owner.code, name: 'ANA', requestId: randomUUID() });
+    await resume(second, replacement);
+    state = await resume(host, owner);
+    await request(host, 'host:command', { sessionId: owner.sessionId, revision: state.revision, action: 'start' });
+    const packet = { sessionId: owner.sessionId, questionIndex: 0, submissionId: randomUUID(), option: 'B' };
+    const replies = await Promise.all([first.timeout(5000).emitWithAck('answer:submit', packet), second.timeout(5000).emitWithAck('answer:submit', { ...packet, option: 'A', submissionId: randomUUID() })]);
+    assert.equal(replies.filter(reply => reply.success).length, 1);
+    f.advance(5201);
+    const recovered = await resume(second, replacement);
+    assert.equal(recovered.answeredCount, 1);
+    assert.equal(Object.keys(recovered.players[replacement.playerId!].answers).length, 1);
+    assert(recovered.players[replacement.playerId!].score <= 2000);
+  } finally { await f.close(); }
+});
 
 test('leaving lobby frees the name, invalidates old credentials, and allows retry', async () => {
   const f = await fixture();
