@@ -6,7 +6,7 @@ import { serialize, deserialize } from 'node:v8';
 import type { Persistence } from './persistence';
 import type { ClientEvents, ServerEvents, SessionCredentials, Reply } from '../types/network';
 
-interface ConnectionData { credentials?: SessionCredentials; tokens: number; refillAt: number }
+interface ConnectionData { credentials?: SessionCredentials; tokens: number; refillAt: number; pending: number }
 type GameSocket = Socket<ClientEvents, ServerEvents, Record<string, never>, ConnectionData>;
 interface Options { hostKey: string; now?: () => number; persistence?: Persistence }
 
@@ -15,6 +15,7 @@ export function createSocketServer(http: HttpServer, options: Options) {
   let generation = 0, committed = 0;
   let storageFailure: Error | undefined, closing = false, publishing = false;
   let writing: Promise<void> | undefined;
+  let pendingRequests = 0;
   const io = new Server<ClientEvents, ServerEvents, Record<string, never>, ConnectionData>(http, {
     maxHttpBufferSize: 256 * 1024,
     perMessageDeflate: false,
@@ -60,12 +61,16 @@ export function createSocketServer(http: HttpServer, options: Options) {
         const codes = new Set(engine.roomCodes());
         for (const [id, entry] of creations) if (!codes.has(entry.credentials.code)) creations.delete(id);
         const data = serialize({ version: 1, rooms: engine.snapshot(), creations });
-        writing = options.persistence.save(data).then(() => { committed = version; }).catch(error => {
+        let timeout: ReturnType<typeof setTimeout>;
+        const deadline = new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => reject(Error('Storage commit timed out')), 5000);
+        });
+        writing = Promise.race([options.persistence.save(data), deadline]).then(() => { committed = version; }).catch(error => {
           storageFailure = error instanceof Error ? error : Error('Storage failure');
           console.error('Penyimpanan pertandingan gagal. Permainan dihentikan; periksa disk lalu restart server.');
           for (const socket of io.sockets.sockets.values()) socket.conn.close();
           throw storageFailure;
-        }).finally(() => { writing = undefined; });
+        }).finally(() => { clearTimeout(timeout); writing = undefined; });
       }
       await writing;
     }
@@ -93,11 +98,15 @@ export function createSocketServer(http: HttpServer, options: Options) {
     if (typeof ack !== 'function') return;
     if (storageFailure || closing) { ack({ success: false, error: 'Penyimpanan tidak tersedia. Tunggu server pulih.', code: 'UNKNOWN' }); return; }
     if (!takeToken(socket)) { ack({ success: false, error: 'Terlalu banyak permintaan. Coba lagi sebentar.', code: 'RATE_LIMIT' }); return; }
+    if (socket.data.pending >= 8 || pendingRequests >= 1000) { ack({ success: false, error: 'Server sedang menyimpan. Coba lagi sebentar.', code: 'RATE_LIMIT' }); return; }
+    socket.data.pending++; pendingRequests++;
     try { const data = operation(); await flush(); ack({ success: true, data }); }
     catch (error) { ack({ success: false, error: storageFailure ? 'Konfirmasi penyimpanan gagal. Tunggu server pulih.' : error instanceof Error ? error.message : 'Permintaan tidak valid.', ...(storageFailure ? { code: 'UNKNOWN' } : {}) }); }
+    finally { socket.data.pending--; pendingRequests--; }
   }
   io.on('connection', socket => {
     socket.data.tokens = 200;
+    socket.data.pending = 0;
     socket.data.refillAt = performance.now();
     socket.on('room:create', (payload, ack) => handle(socket, ack, () => {
       const address = socket.handshake.address;
