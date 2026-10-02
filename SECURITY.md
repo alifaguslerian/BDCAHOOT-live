@@ -8,6 +8,21 @@ The transport bounds packets to 256 KiB (quiz payloads to 200 KiB), connections,
 
 Use a trusted private LAN or TLS. Plain HTTP cannot protect tokens against interception. Never expose HOST_KEY through NEXT_PUBLIC variables or share it with players. Do not expose this service directly to the Internet.
 
-State is in memory. Browser refresh/reconnect survive while the process runs. No claim of crash durability, SQLite persistence, exactly-once network delivery or comprehensive penetration testing is made.
+Normal startup enables a private SQLite snapshot database (default data/game.sqlite).
+The worker commits with synchronous=FULL before success ACKs; broadcasts wait for
+committed state. Failed writes stop gameplay and reject new connections. Corrupt or
+unsupported storage fails startup, and one process exclusively owns each database.
+Active questions recover to scoreboard after restart; confirmed receipts and scores
+remain, and retries do not add points twice. Tests include abrupt process termination
+after ACK. This is not a guarantee against hardware failure, power loss on devices
+that misreport sync, or exactly-once network delivery.
+
+The database contains unencrypted bearer tokens and answer keys. Restrict filesystem
+access and backup access; Windows requires appropriate operator-account ACLs. Default
+data and SQLite sidecar files are ignored by Git. Do not place storage in public/,
+network shares or cloud-synced folders. No private snapshot import endpoint exists.
+Recovery requires the browser's saved session token and the same origin. Clearing
+browser storage is not repaired by server persistence. Comprehensive adversarial
+recovery/security testing remains in phase 9B.
 
 Report vulnerabilities privately to maintainers with a minimal reproduction and affected revision. Do not put live tokens or personal data in public issues.
