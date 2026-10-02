@@ -177,3 +177,77 @@ and production build passed. Lint initially scanned third-party Playwright files
 reports/python; reports is now excluded from both ESLint and TypeScript project
 inputs, and both checks were rerun successfully. The existing Node module.register
 deprecation and localStorage experimental warnings remain non-fatal.
+
+## 2 October 2026 — phase 9A persistence
+
+Normal server startup now opens a private SQLite database before listening. A worker
+owns the database, uses synchronous=FULL transactions and exclusive ownership, and
+stores versioned engine snapshots plus room-creation retry records. Success ACKs and
+state broadcasts wait for commit. Concurrent writes are coalesced; the prepared
+write statement is reused. No extra runtime npm dependency was introduced; this uses
+the Node SQLite API in the supported runtime. See [Node SQLite documentation](https://nodejs.org/api/sqlite.html).
+
+Recovery preserves credentials, shuffled question order, players, scores, join
+sequence and answer receipts. Nonexpired QUESTION/REVEAL rooms become SCOREBOARD,
+retaining accepted answers and applying unanswered time penalties only once. Other
+stages are retained. The normalized recovery snapshot is committed before listening.
+Reset/deletion is durable. Corrupt/unsupported storage fails startup; write failure
+disconnects clients and rejects new gameplay instead of confirming uncommitted data.
+
+Verification:
+
+- Tests initially failed because persistence did not exist. Seven new test cases now
+  cover stage recovery/expiry, receipts and score preservation, exclusive database
+  ownership, corrupt-file preservation, unsupported snapshot versions, durable reset,
+  creation/join retries, commit-gated ACK/broadcast, write failure, and shutdown.
+- A real child server accepted 100 simultaneous player answers and returned successful
+  ACKs. The test forcibly killed its process without graceful close, restarted against
+  the same database, and verified all 100 answers and identical receipts/scores on retry.
+- A concurrent-close regression initially timed out: two close calls raced while the
+  worker was stopping. Sharing one close promise fixed it; the test now passes.
+- The complete regression suite has 33 tests. Typecheck, lint and production build
+  also passed. The storage-failure log in the test output is intentional fault injection.
+- Production-browser smoke with SQLite enabled: three players (two bots + browser),
+  two questions, six accepted answers, scoreboard and podium reached, no JavaScript
+  or console errors. Report: reports/9a-ui-smoke.json. This smoke is not a browser
+  crash/restart rehearsal or a repeat of the full 8C browser profile.
+
+### Durable-write endurance
+
+Command for the final run:
+`npm run test:endurance -- --players=100 --questions=40 --seconds=5 --database=reports/phase9a-final.sqlite --report=reports/endurance-9a-durable-final.json`
+
+Windows / Node v26.10.0 / i5-12450HX, same local machine as 8C. Started 10:05:13 WIB.
+No other build/test ran concurrently. These are real socket bots on loopback with
+actual SQLite commits and real clocks, not physical phones. CPU covers the process
+including its storage worker; RSS includes workers/native allocations, while the
+reported JS heap is the sampling thread's heap, not all worker heaps combined.
+
+| Measurement | Final run |
+| --- | --- |
+| Duration / questions / accepted answers | 421.17 s / 40 / 4,000 |
+| Unexpected disconnects | 0 |
+| ACK p50 / p95 / p99 / maximum | 35.98 / 57.61 / 266.17 / 268.48 ms |
+| Game CPU average / peak sampled (one-core scale) | 3.40% / 37.79% |
+| Game sampled peak RSS / sampling-thread heap | 254.36 / 45.10 MiB |
+| Game event-loop maximum | 116.13 ms |
+| Cleanup room / socket count | 0 / 0 |
+
+The earlier durable run (reports/endurance-9a-durable.json) also passed 4,000 answers,
+but prepared a new statement for each write: peak sampled RSS 296.27 MiB, ACK p95
+57.73 ms and p99 248.25 ms. Reusing the statement lowered the observed peak in the
+second run; p99 and average CPU did not improve. One run per version is not a robust
+causal benchmark or evidence of a universal speedup. Memory fell during both runs,
+so the earlier growth was not established as a permanent leak.
+
+Persistence has a measurable ACK cost compared with the memory-only 8C run. The
+optimistic client UI remains immediate, but durable confirmation is not zero-delay.
+Both runs used five-second questions plus reveal/scoreboard and no forced server GC.
+No claim is made about performance on slower disks, a full 100-phone LAN, or absence
+of all memory leaks.
+
+Phase 9A local acceptance is complete. Phase 9B still needs broader in-flight crash,
+storage-stall/failure and malicious-input testing; physical router/phone rehearsal
+and hardware power-loss testing remain unverified. Default database path is
+data/game.sqlite; protect its tokens/answer keys and backups. Operations and recovery
+policy are documented in README and SECURITY. No commit, push or branch mutation.
