@@ -22,7 +22,19 @@ access and backup access; Windows requires appropriate operator-account ACLs. De
 data and SQLite sidecar files are ignored by Git. Do not place storage in public/,
 network shares or cloud-synced folders. No private snapshot import endpoint exists.
 Recovery requires the browser's saved session token and the same origin. Clearing
-browser storage is not repaired by server persistence. Comprehensive adversarial
-recovery/security testing remains in phase 9B.
+browser storage is not repaired by server persistence.
+
+Phase 9B adds a five-second commit deadline and bounds in-flight requests to eight
+per connection and 1,000 globally. A timeout stops transports; it does not cancel an
+underlying filesystem write or prove that the pending mutation was lost. Recovery
+must inspect persisted receipts. A physically stuck worker can still require operator
+process termination. Connection-level rate limits can be bypassed by reconnecting;
+they are resource controls, not protection against a coordinated LAN denial of service.
+
+Local tests cover interrupted SQLite transactions, process death before/after commit,
+injected storage rejection/stall, conflicting submissions from two connections,
+revoked tokens, malformed-packet floods, foreign origins and oversized packets.
+They do not fill a physical disk, cut power, exhaustively test native SQLite commit
+crash points, or replace a physical phone/router rehearsal.
 
 Report vulnerabilities privately to maintainers with a minimal reproduction and affected revision. Do not put live tokens or personal data in public issues.
