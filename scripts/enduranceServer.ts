@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { createSocketServer } from '../server/socketServer';
+import { SnapshotStore } from '../server/persistence';
 
 export interface Sample {
   elapsedMs: number; intervalMs: number; phase: string; cpuPercentOneCore: number;
@@ -15,7 +16,9 @@ async function main() {
   await app?.prepare();
   const handler = app?.getRequestHandler();
   const http = createServer((req, res) => { if (handler) void handler(req, res); else res.end(); });
-  const service = createSocketServer(http, { hostKey: process.env.ENDURANCE_HOST_KEY });
+  const persistence = process.env.ENDURANCE_DATABASE ? await SnapshotStore.open(process.env.ENDURANCE_DATABASE) : undefined;
+  const service = createSocketServer(http, { hostKey: process.env.ENDURANCE_HOST_KEY, persistence });
+  await service.ready;
   if (app) http.on('upgrade', (req, socket, head) => {
     if (!req.url?.startsWith('/socket.io/')) void app.getUpgradeHandler()(req, socket, head);
   });

@@ -16,6 +16,7 @@ async function main() {
     players: { type: 'string', default: '100' }, questions: { type: 'string', default: '40' },
     seconds: { type: 'string', default: '5' }, report: { type: 'string', default: 'reports/endurance.json' },
     rounds: { type: 'string', default: '1' }, browser: { type: 'boolean', default: false },
+    database: { type: 'string' },
   } });
   const playersCount = Number(values.players), questions = Number(values.questions), seconds = Number(values.seconds);
   const rounds = Number(values.rounds);
@@ -29,7 +30,7 @@ async function main() {
   const clients: { socket: Socket; view?: RoomView }[] = [];
   const hostKey = randomUUID();
   const worker = spawn(process.execPath, ['--import', 'tsx', resolve('scripts/enduranceServer.ts')], {
-    env: { ...process.env, ENDURANCE_HOST_KEY: hostKey, ENDURANCE_BROWSER: values.browser ? '1' : '0' },
+    env: { ...process.env, ENDURANCE_HOST_KEY: hostKey, ENDURANCE_BROWSER: values.browser ? '1' : '0', ENDURANCE_DATABASE: values.database ? resolve(values.database) : '' },
     stdio: ['ignore', 'inherit', 'inherit', 'ipc'], windowsHide: true,
   });
   let failure: Error | undefined, stopping = false, disconnected = 0, completedQuestions = 0, pid: number | undefined;
@@ -200,7 +201,7 @@ async function main() {
       } : null];
     }));
     const report = { passed: !failure, error: failure?.message ?? null, startedAt, elapsedMs: performance.now() - started,
-      config: { players: playersCount, questions, rounds, browser: values.browser, questionSeconds: seconds, revealMs: 4000, scoreboardMs: values.browser ? 2000 : 1000 },
+      config: { players: playersCount, questions, rounds, browser: values.browser, persistence: Boolean(values.database), questionSeconds: seconds, revealMs: 4000, scoreboardMs: values.browser ? 2000 : 1000 },
       environment: { node: process.version, platform: platform(), release: release(), cpu: cpus()[0]?.model, logicalCpus: cpus().length, totalMemoryBytes: totalmem(), serverPid: pid, workerExitCode },
       scope: values.browser ? 'Production Next.js + Socket.io; 99 bots at default player count plus one Chromium player and Chromium Host; real clock; loopback; no physical phones; no server forced GC; browser post-game GC diagnostic only.' : 'Production Socket.io + game engine, real clock, isolated server process; loopback, no browser or physical phones; no forced GC.',
       completedQuestions, botAnswers: latencies.length,
