@@ -49,10 +49,16 @@ Setelah restart dengan database yang sama:
   secara periodik (sekitar 30 detik di luar waktu penulisan), juga ketika ada perubahan game
   dan saat shutdown normal.
 
-Jika disk gagal ditulis, server memutus koneksi permainan, menolak koneksi baru dan
+Jika disk gagal ditulis atau commit tidak selesai dalam 5 detik, server memutus koneksi permainan, menolak koneksi baru dan
 menampilkan error di terminal. Perbaiki penyimpanan lalu restart; jangan menghapus
 database untuk menghilangkan error. Database rusak atau versi tidak didukung membuat
 startup gagal tanpa menggantinya dengan pertandingan kosong.
+
+Request yang menunggu dibatasi 8 per koneksi dan 1.000 seluruh server. Kelebihannya
+ditolak sementara dengan RATE_LIMIT sebelum mengubah game. Timeout bukan bukti bahwa
+write dibatalkan: commit yang terlambat mungkin sudah tersimpan. Setelah restart,
+gunakan sesi dan receipt server sebagai sumber status jawaban. Jika disk/worker benar-benar
+hang sehingga shutdown tidak selesai, operator perlu menghentikan proses lalu memeriksa disk.
 
 Gunakan disk lokal yang andal, bukan folder jaringan/cloud-sync. Lindungi folder data
 dengan izin akun operator (terutama ACL Windows); database menyimpan rahasia sesi dan
