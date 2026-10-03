@@ -1,39 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { Suspense, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, LogIn, Monitor, Smartphone, X, User } from 'lucide-react';
+import dynamic from 'next/dynamic';
+import { ArrowRight, LogIn, Monitor, Smartphone, User } from 'lucide-react';
 import { sound } from '@/lib/soundFX';
+const PlayerJoinForm = dynamic(() => import('@/components/player/PlayerJoinForm').then(module => module.PlayerJoinForm));
 
-interface HostLandingProps {
-  onStartHost: () => void;
-  onEnterPlayer: (pin?: string) => void;
-}
-
-export const HostLanding: React.FC<HostLandingProps> = ({ onStartHost, onEnterPlayer }) => {
-  const [showPinModal, setShowPinModal] = useState(false);
-  const [pinInput, setPinInput] = useState('');
-  const [pinError, setPinError] = useState(false);
-
-  const handleOpenPin = () => {
-    sound.playTap();
-    setShowPinModal(true);
-    setPinError(false);
-  };
-
-  const handlePinSubmit = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const cleanPin = pinInput.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-    if (cleanPin.length === 6) {
-      sound.playSuccess();
-      setShowPinModal(false);
-      onEnterPlayer(cleanPin);
-    } else {
-      sound.playError();
-      setPinError(true);
-      setTimeout(() => setPinError(false), 800);
-    }
-  };
+export const HostLanding = () => {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [showJoinForm, setShowJoinForm] = useState(false);
 
   return (
     <div className="relative min-h-screen flex flex-col justify-between bg-[#0b0e14] text-[#e1e2eb] selection:bg-[#f5a623] selection:text-[#644000]">
@@ -68,13 +44,6 @@ export const HostLanding: React.FC<HostLandingProps> = ({ onStartHost, onEnterPl
             >
               Host Console
             </Link>
-            <button
-              type="button"
-              onClick={handleOpenPin}
-              className="text-[#d7c3ae] hover:text-[#e1e2eb] transition-colors cursor-pointer"
-            >
-              Quick PIN
-            </button>
           </nav>
 
           <div className="flex items-center gap-3">
@@ -147,17 +116,7 @@ export const HostLanding: React.FC<HostLandingProps> = ({ onStartHost, onEnterPl
               {/* Card 2: MASUK / PLAYER DEVICE */}
               <div
                 id="card-player"
-                onClick={handleOpenPin}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    handleOpenPin();
-                  }
-                }}
-                aria-label="Masuk sebagai Player - Buka Form PIN Ruang"
-                className="group relative flex flex-col justify-between p-8 rounded-xl bg-[#151a22] border border-[#272a31] hover:border-[#3b82f6]/60 hover:bg-[#1d2026] transition-all duration-200 cursor-pointer shadow-lg hover:scale-[1.01]"
+                className="group relative flex flex-col justify-between p-8 rounded-xl bg-[#151a22] border border-[#272a31] shadow-lg"
               >
                 <div className="flex flex-col">
                   <div className="w-12 h-12 rounded-lg bg-[#32353c] flex items-center justify-center text-[#e1e2eb] mb-6 group-hover:bg-[#363940] transition-colors duration-200" aria-hidden="true">
@@ -176,19 +135,14 @@ export const HostLanding: React.FC<HostLandingProps> = ({ onStartHost, onEnterPl
                   </p>
                 </div>
                 <div className="pt-2 flex flex-col gap-2">
-                  <div className="w-full py-3 px-5 rounded bg-[#32353c] text-[#e1e2eb] font-bold text-sm uppercase tracking-wider flex items-center justify-between group-hover:bg-[#363940] hover:text-white transition-colors shadow-md">
+                  <button
+                    type="button"
+                    onClick={() => { sound.playTap(); setShowJoinForm(true); dialogRef.current?.showModal(); }}
+                    className="w-full min-h-12 py-3 px-5 rounded bg-[#32353c] text-[#e1e2eb] font-bold text-sm uppercase tracking-wider flex items-center justify-between hover:bg-[#363940] hover:text-white transition-colors shadow-md cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#ffc880]"
+                  >
                     <span>Masukkan Kode Room</span>
                     <LogIn className="w-5 h-5 transition-transform duration-200 group-hover:translate-x-1" />
-                  </div>
-                  <div className="text-right">
-                    <Link
-                      href="/player/join"
-                      onClick={(e) => e.stopPropagation()}
-                      className="text-xs text-[#d7c3ae] hover:text-[#ffc880] underline transition-colors"
-                    >
-                      Buka form join langsung &rarr;
-                    </Link>
-                  </div>
+                  </button>
                 </div>
               </div>
             </div>
@@ -205,80 +159,14 @@ export const HostLanding: React.FC<HostLandingProps> = ({ onStartHost, onEnterPl
         </div>
       </main>
 
-      {/* PIN Modal Popup */}
-      {showPinModal && (
-        <div
-          id="pin-modal"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowPinModal(false);
-          }}
-          className="fixed inset-0 z-50 bg-[#0b0e14]/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
-        >
-          <div className="w-full max-w-md bg-[#1d2026] border border-[#272a31] rounded-xl p-6 shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex flex-col">
-                <span className="font-anybody text-lg text-[#e1e2eb] font-bold uppercase tracking-tight">
-                  KONTES PEMAIN
-                </span>
-                <span className="text-xs font-bold text-[#d7c3ae] uppercase tracking-wider">
-                  Sambungkan ke layar arena
-                </span>
-              </div>
-              <button
-                id="modal-close"
-                onClick={() => setShowPinModal(false)}
-                className="w-8 h-8 rounded-lg bg-[#32353c] flex items-center justify-center text-[#d7c3ae] hover:text-white transition-colors"
-                type="button"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handlePinSubmit} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2">
-                <label
-                  htmlFor="room-pin-input"
-                  className="text-xs font-bold text-[#d7c3ae] uppercase tracking-wider"
-                >
-                  PIN RUANG (6 DIGIT)
-                </label>
-                <input
-                  id="room-pin-input"
-                  type="text"
-                  maxLength={7}
-                  value={pinInput}
-                  onChange={(e) => {
-                    let val = e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-                    if (val.length > 3) {
-                      val = val.slice(0, 3) + ' ' + val.slice(3, 6);
-                    }
-                    setPinInput(val);
-                  }}
-                  placeholder="BDA 729"
-                  autoFocus
-                  className={`w-full h-14 bg-[#0b0e14] text-center font-anybody font-extrabold text-2xl tracking-[0.2em] text-[#ffc880] placeholder:text-[#524534] rounded-lg border ${
-                    pinError ? 'border-[#ffb4ab] bg-[#93000a]/20' : 'border-[#272a31]'
-                  } focus:outline-none focus:border-[#ffc880] transition-colors`}
-                />
-                <p className="text-xs text-[#d7c3ae] text-center">
-                  Coba PIN demo default: <strong className="text-[#ffc880]">BDA 729</strong>
-                </p>
-              </div>
-
-              <button
-                type="submit"
-                id="submit-pin-btn"
-                className="mt-2 w-full py-3 px-4 rounded bg-[#f5a623] hover:bg-[#ffc880] text-[#452b00] font-bold text-sm uppercase tracking-wider transition-colors shadow-md flex items-center justify-center gap-2"
-              >
-                <span>Masuk Pertandingan</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Global Bottom Status Bar */}
+      <dialog ref={dialogRef} onClose={() => setShowJoinForm(false)} aria-label="Masukkan kode room" className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md max-h-[90dvh] overflow-y-auto rounded-xl border border-[#272a31] bg-[#0b0e14] p-6 text-[#e1e2eb] backdrop:bg-black/70">
+        <form method="dialog" className="flex justify-end mb-2">
+          <button className="min-h-12 min-w-12 px-3 rounded text-sm focus-visible:outline-2 focus-visible:outline-[#ffc880]">Tutup</button>
+        </form>
+        {showJoinForm && <Suspense fallback={<p>Memuat...</p>}><PlayerJoinForm /></Suspense>}
+      </dialog>
       <footer className="w-full bg-[#0b0e14] border-t border-[#1d2026] shadow-[0_-1px_8px_rgba(0,0,0,0.25)]">
         <div className="h-14 w-full px-6 lg:px-12 flex items-center justify-between text-xs font-bold text-[#d7c3ae] tracking-wider">
           <div className="flex items-center gap-2">
