@@ -56,12 +56,14 @@ export class GameEngine {
   private onChange?: (code: string) => void;
   private onAnswer?: (code: string) => void;
   private maxPlayers: number;
+  private deferQuestionStart: boolean;
 
-  constructor(options: {now?: () => number; onChange?: (code: string) => void; onAnswer?: (code: string) => void; maxPlayers?: number} = {}) {
+  constructor(options: {now?: () => number; onChange?: (code: string) => void; onAnswer?: (code: string) => void; maxPlayers?: number; deferQuestionStart?: boolean} = {}) {
     const epoch=Date.now(), anchor=performance.now();
     this.now=options.now ?? (() => epoch+performance.now()-anchor);
     this.onChange=options.onChange; this.onAnswer=options.onAnswer;
     this.maxPlayers=options.maxPlayers ?? 150;
+    this.deferQuestionStart = options.deferQuestionStart ?? false;
     if (!Number.isInteger(this.maxPlayers) || this.maxPlayers<1 || this.maxPlayers>150) throw new Error('Batas pemain harus 1 sampai 150.');
   }
 
@@ -114,18 +116,28 @@ export class GameEngine {
     return {room,identity};
   }
   inspect(code: string): {code: string; stage: GameStage} { const room=this.room(code); return {code:room.code,stage:room.stage}; }
-  join(code: string, name: string, requestId: string): SessionCredentials {
+  join(code: string, name: string, requestId: string, current?: SessionCredentials): SessionCredentials {
     const room=this.room(code); identifier(requestId);
     const normalized=string(name,15).toUpperCase();
     if(!/^[A-Z]{1,15}$/.test(normalized)) throw new Error('Nama harus 1 sampai 15 huruf A-Z.');
     const retry=room.joins.get(requestId);
+    let bound: SessionCredentials | undefined;
+    if (current) { try { bound = this.resume(current); } catch { /* Revoked/expired sessions may join again. */ } }
+    if (bound?.role === 'player' && retry?.credentials.token !== bound.token) throw Error('Keluar dari room sebelum mendaftarkan pemain lain.');
     if(retry) {
       if(retry.name!==normalized || !room.tokens.has(retry.credentials.token)) throw new Error('Permintaan bergabung sudah digunakan.');
       room.touched=this.now(); return {...retry.credentials};
     }
     if(room.stage!=='LOBBY') throw new Error('Permainan sudah dimulai.');
     if(Object.values(room.players).some(player => player.name === normalized)) throw new Error('Nama sudah digunakan di room ini.');
-    if(Object.keys(room.players).length>=this.maxPlayers || room.joins.size>=1000) throw new Error('Ruang sudah penuh.');
+    if(Object.keys(room.players).length>=this.maxPlayers) throw new Error('Ruang sudah penuh.');
+    // Retain recent revoked requests against delayed retries; evict the oldest only at capacity.
+    if (room.joins.size >= 1000) {
+      for (const [id, entry] of room.joins) {
+        if (!room.tokens.has(entry.credentials.token)) { room.joins.delete(id); break; }
+      }
+      if (room.joins.size >= 1000) throw new Error('Ruang sudah penuh.');
+    }
     const id=randomUUID();
     room.players[id]={id,name:normalized,joinedAt:this.now(),joinSequence:++room.sequence,connected:true,score:0,totalResponseTimeMs:0,answers:{}};
     const credentials=this.credentials(room,{role:'player',playerId:id});
@@ -184,7 +196,7 @@ export class GameEngine {
       if(existing.submissionId!==request.submissionId || existing.selectedOption!==request.option) throw new Error('Jawaban pertama sudah terkunci.');
       return {...existing};
     }
-    if(room.stage!=='QUESTION' || room.index!==request.questionIndex || this.now()>room.end!+200) throw new Error('Waktu menjawab sudah berakhir atau soal tidak aktif.');
+    if(room.stage!=='QUESTION' || room.start === null || room.end === null || room.index!==request.questionIndex || this.now()>room.end+200) throw new Error('Waktu menjawab sudah berakhir atau soal tidak aktif.');
     const question=room.questions[room.index], player=room.players[identity.playerId];
     const received=this.now(), duration=Math.max(0,Math.min(received-room.start!,question.timerSeconds*1000));
     const correct=request.option===question.correctOption;
@@ -203,12 +215,22 @@ export class GameEngine {
     room.stage='REVEAL'; room.revealEnd=at+room.settings.revealDurationMs; this.changed(room);
   }
   private openQuestion(room: Room): void {
-    room.index++; room.stage='QUESTION'; room.start=this.now(); room.end=room.start+room.questions[room.index].timerSeconds*1000; room.revealEnd=null; this.changed(room);
+    room.index++; room.stage='QUESTION'; room.start=this.deferQuestionStart ? null : this.now();
+    room.end=room.start === null ? null : room.start+room.questions[room.index].timerSeconds*1000; room.revealEnd=null; this.changed(room);
+  }
+  activateCommittedQuestions(): void {
+    for (const room of this.rooms.values()) if (room.stage === 'QUESTION' && room.start === null) {
+      // The committed QUESTION intent already recovers to scoreboard after a crash.
+      // Start this runtime clock only after that intent is durable, before publication.
+      room.start = this.now(); room.end = room.start + room.questions[room.index].timerSeconds * 1000;
+      room.revision++;
+    }
   }
   command(credentials: SessionCredentials, request: HostCommand): SessionCredentials | undefined {
     const {room,identity}=this.authenticate(credentials); object(request);
     if(identity.role!=='host') throw new Error('Perintah hanya untuk host.');
     if(request.sessionId!==room.sessionId || request.revision!==room.revision) throw new Error('Status ruang berubah. Silakan coba lagi.');
+    if(room.stage === 'QUESTION' && room.start === null && request.action !== 'reset') throw Error('Soal sedang disiapkan. Tunggu penyimpanan selesai.');
     switch(request.action) {
       case 'reset': this.rooms.delete(room.code); this.onChange?.(room.code); return;
       case 'kick': {
@@ -233,7 +255,7 @@ export class GameEngine {
     const now=this.now();
     for(const room of this.rooms.values()) {
       if(now-room.touched>TTL) {this.rooms.delete(room.code);this.onChange?.(room.code);continue;}
-      if(room.stage==='QUESTION' && now>room.end!+200) this.reveal(room,room.end!+200);
+      if(room.stage==='QUESTION' && room.end !== null && now>room.end+200) this.reveal(room,room.end+200);
       if(room.stage==='REVEAL' && now>=room.revealEnd!) {room.stage='SCOREBOARD';this.changed(room);}
     }
   }
