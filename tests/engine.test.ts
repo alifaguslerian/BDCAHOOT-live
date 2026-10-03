@@ -26,6 +26,44 @@ function setup(count = 2) {
   return {engine, host, join, command, submit, advance: (ms: number) => {time += ms; engine.tick();}};
 }
 
+test('revoked join history cannot permanently fill an otherwise empty lobby', () => {
+  const s = setup();
+  let lastId = '';
+  for (let i = 0; i < 1100; i++) {
+    lastId = randomUUID();
+    const player = s.engine.join(s.host.code, 'ANA', lastId);
+    s.engine.leave(player);
+  }
+  assert.throws(() => s.engine.join(s.host.code, 'ANA', lastId), /digunakan/);
+  assert(s.join('BOB').playerId);
+});
+
+test('prepared questions reject answers, recover safely, and start their full clock only after activation', () => {
+  let now = 10000;
+  const engine = new GameEngine({ now: () => now, deferQuestionStart: true });
+  const host = engine.createRoom(quiz()), player = engine.join(host.code, 'ANA', randomUUID());
+  const command = (action: HostCommand['action']) => engine.command(host, { sessionId: host.sessionId, revision: engine.view(host).revision, action });
+  command('start');
+  const packet = { sessionId: host.sessionId, questionIndex: 0, submissionId: randomUUID(), option: 'A' as const };
+  now += 7000; engine.tick();
+  assert.equal(engine.view(host).stage, 'QUESTION');
+  assert.equal(engine.view(host).questionStartedAtMs, null);
+  assert.throws(() => engine.submit(player, packet));
+  assert.throws(() => command('reveal'), /disiapkan/);
+  const recovered = new GameEngine({ now: () => now });
+  recovered.restore(engine.snapshot());
+  assert.equal(recovered.view(host).stage, 'SCOREBOARD');
+  assert.equal(recovered.view(host).players[player.playerId!].totalResponseTimeMs, 5000);
+  engine.activateCommittedQuestions();
+  assert.equal(engine.view(host).questionEndsAtMs, now + 5000);
+  engine.submit(player, packet);
+  command('reveal'); command('scoreboard'); command('next');
+  assert.equal(engine.view(host).questionStartedAtMs, null);
+  now += 1500; engine.activateCommittedQuestions();
+  assert.equal(engine.view(host).questionEndsAtMs, now + 5000);
+  assert.equal(engine.view(host).players[player.playerId!].score, 2000);
+});
+
 test('server identity, private snapshots and idempotent answers', () => {
   const s = setup(); const a = s.join(); const b = s.join('BOB'); s.command('start');
   const request = {sessionId: s.host.sessionId, questionIndex: 0, option: 'A' as const, submissionId: randomUUID()};
