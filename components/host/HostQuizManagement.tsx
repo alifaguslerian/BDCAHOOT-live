@@ -34,65 +34,7 @@ export interface QuizItem {
   }[];
 }
 
-const INITIAL_QUIZZES: QuizItem[] = [
-  {
-    id: 'quiz-1',
-    title: 'Frontend Web & System Architecture Arena',
-    category: 'Teknologi Web',
-    questionCount: 3,
-    isValid: true,
-    incompleteCount: 0,
-    lastEdited: 'Hari ini, 14:20',
-    questions: [
-      {
-        id: 'q1',
-        question: 'Manakah framework CSS yang mengutamakan pendekatan utility-first?',
-        duration: 15,
-        options: ['Tailwind CSS', 'Bootstrap', 'Bulma CSS', 'Foundation'],
-        correctIndex: 0,
-      },
-      {
-        id: 'q2',
-        question: 'Protokol komunikasi real-time full-duplex dua arah melalui satu TCP adalah?',
-        duration: 20,
-        options: ['WebSockets', 'HTTP Long Polling', 'Server-Sent Events (SSE)', 'DNS Round Robin'],
-        correctIndex: 0,
-      },
-      {
-        id: 'q3',
-        question: 'Library React state management yang menggunakan atomic store pattern adalah?',
-        duration: 15,
-        options: ['Jotai / Recoil', 'Redux Classic', 'Context API bawaan', 'jQuery Store'],
-        correctIndex: 0,
-      },
-    ],
-  },
-  {
-    id: 'quiz-2',
-    title: 'Pengetahuan Umum & Pop Quiz Tech',
-    category: 'Umum & Trivia',
-    questionCount: 2,
-    isValid: false,
-    incompleteCount: 1,
-    lastEdited: 'Kemarin',
-    questions: [
-      {
-        id: 'q2-1',
-        question: 'Bahasa pemrograman yang diciptakan oleh Brendan Eich dalam 10 hari adalah?',
-        duration: 15,
-        options: ['JavaScript', 'Python', 'Ruby', 'PHP'],
-        correctIndex: 0,
-      },
-      {
-        id: 'q2-2',
-        question: '', // Belum lengkap
-        duration: 20,
-        options: ['', '', '', ''],
-        correctIndex: 0,
-      },
-    ],
-  },
-];
+const INITIAL_QUIZZES: QuizItem[] = [];
 
 export interface HostQuizManagementProps {
   onBackToLanding: () => void;
