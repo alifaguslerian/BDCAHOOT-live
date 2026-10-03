@@ -6,9 +6,9 @@ import { serialize, deserialize } from 'node:v8';
 import type { Persistence } from './persistence';
 import type { ClientEvents, ServerEvents, SessionCredentials, Reply } from '../types/network';
 
-interface ConnectionData { credentials?: SessionCredentials; tokens: number; refillAt: number; pending: number }
+interface ConnectionData { credentials?: SessionCredentials; tokens: number; refillAt: number; pending: number; needsState?: boolean }
 type GameSocket = Socket<ClientEvents, ServerEvents, Record<string, never>, ConnectionData>;
-interface Options { hostKey: string; now?: () => number; persistence?: Persistence }
+interface Options { hostKey: string; now?: () => number; persistence?: Persistence; maxConnectionsPerAddress?: number }
 
 export function createSocketServer(http: HttpServer, options: Options) {
   if (options.hostKey.length < 12) throw Error('HOST_KEY minimal 12 karakter.');
@@ -16,6 +16,9 @@ export function createSocketServer(http: HttpServer, options: Options) {
   let storageFailure: Error | undefined, closing = false, publishing = false;
   let writing: Promise<void> | undefined;
   let pendingRequests = 0;
+  const connectionsByAddress = new Map<string, number>();
+  const addressLimit = options.maxConnectionsPerAddress ?? 200;
+  if (!Number.isInteger(addressLimit) || addressLimit < 1) throw Error('Batas koneksi tidak valid.');
   const io = new Server<ClientEvents, ServerEvents, Record<string, never>, ConnectionData>(http, {
     maxHttpBufferSize: 256 * 1024,
     perMessageDeflate: false,
@@ -23,12 +26,24 @@ export function createSocketServer(http: HttpServer, options: Options) {
       const origin = req.headers.origin;
       let allowed = !origin;
       try { allowed ||= new URL(origin!).host === req.headers.host; } catch { /* invalid origin */ }
-      callback(null, allowed && !storageFailure && !closing && io.engine.clientsCount < 1000);
+      callback(null, allowed && !storageFailure && !closing && io.engine.clientsCount < 1000
+        && (connectionsByAddress.get(req.socket.remoteAddress || '') ?? 0) < addressLimit);
     },
+  });
+  io.engine.on('connection', connection => {
+    const address = connection.remoteAddress || '';
+    const count = connectionsByAddress.get(address) ?? 0;
+    // Recheck after handshake to cover simultaneous requests passing allowRequest.
+    if (count >= addressLimit || io.engine.clientsCount > 1000) { connection.close(true); return; }
+    connectionsByAddress.set(address, count + 1);
+    connection.once('close', () => {
+      const remaining = (connectionsByAddress.get(address) ?? 1) - 1;
+      if (remaining) connectionsByAddress.set(address, remaining); else connectionsByAddress.delete(address);
+    });
   });
   const dirtyRooms = new Set<string>();
   const dirtyCounts = new Set<string>();
-  const engine = new GameEngine({ now: options.now,
+  const engine = new GameEngine({ now: options.now, deferQuestionStart: Boolean(options.persistence),
     onChange: code => { generation++; dirtyRooms.add(code); },
     onAnswer: code => { generation++; dirtyCounts.add(code); } });
   // All LAN clients may share an address. Limit expensive failed operator authentication separately.
@@ -75,12 +90,13 @@ export function createSocketServer(http: HttpServer, options: Options) {
       await writing;
     }
     if (storageFailure) throw storageFailure;
+    engine.activateCommittedQuestions();
   }
   const ready = flush();
 
   function bind(socket: GameSocket, credentials: SessionCredentials) {
     socket.data.credentials = engine.resume(credentials);
-    dirtyRooms.add(socket.data.credentials.code);
+    socket.data.needsState = true;
   }
   function credentials(socket: GameSocket) {
     if (!socket.data.credentials) throw Error('Bergabung ke room terlebih dahulu.');
@@ -94,13 +110,13 @@ export function createSocketServer(http: HttpServer, options: Options) {
     socket.data.tokens--;
     return true;
   }
-  async function handle<T>(socket: GameSocket, ack: ((reply: Reply<T>) => void) | undefined, operation: () => T) {
+  async function handle<T>(socket: GameSocket, ack: ((reply: Reply<T>) => void) | undefined, operation: () => T, committedResult?: () => T) {
     if (typeof ack !== 'function') return;
     if (storageFailure || closing) { ack({ success: false, error: 'Penyimpanan tidak tersedia. Tunggu server pulih.', code: 'UNKNOWN' }); return; }
     if (!takeToken(socket)) { ack({ success: false, error: 'Terlalu banyak permintaan. Coba lagi sebentar.', code: 'RATE_LIMIT' }); return; }
     if (socket.data.pending >= 8 || pendingRequests >= 1000) { ack({ success: false, error: 'Server sedang menyimpan. Coba lagi sebentar.', code: 'RATE_LIMIT' }); return; }
     socket.data.pending++; pendingRequests++;
-    try { const data = operation(); await flush(); ack({ success: true, data }); }
+    try { const data = operation(); await flush(); ack({ success: true, data: committedResult ? committedResult() : data }); }
     catch (error) { ack({ success: false, error: storageFailure ? 'Konfirmasi penyimpanan gagal. Tunggu server pulih.' : error instanceof Error ? error.message : 'Permintaan tidak valid.', ...(storageFailure ? { code: 'UNKNOWN' } : {}) }); }
     finally { socket.data.pending--; pendingRequests--; }
   }
@@ -143,14 +159,14 @@ export function createSocketServer(http: HttpServer, options: Options) {
       return undefined;
     }));
     socket.on('room:join', (payload, ack) => handle(socket, ack, () => {
-      const session = engine.join(payload?.code, payload?.name, payload?.requestId);
+      const session = engine.join(payload?.code, payload?.name, payload?.requestId, socket.data.credentials);
       bind(socket, session);
       return session;
     }));
     socket.on('session:resume', (payload, ack) => handle(socket, ack, () => {
       bind(socket, payload);
       return engine.view(credentials(socket));
-    }));
+    }, () => engine.view(credentials(socket))));
     socket.on('answer:submit', (payload, ack) => handle(socket, ack, () => engine.submit(credentials(socket), payload)));
     socket.on('host:command', (payload, ack) => handle(socket, ack, () => {
       const session = engine.command(credentials(socket), payload);
@@ -182,15 +198,16 @@ export function createSocketServer(http: HttpServer, options: Options) {
     for (const socket of io.sockets.sockets.values()) {
       const session = socket.data.credentials;
       if (!session) continue;
-      if (!dirtyRooms.has(session.code) && !(session.role === 'host' && dirtyCounts.has(session.code))) continue;
+      if (!socket.data.needsState && !dirtyRooms.has(session.code) && !(session.role === 'host' && dirtyCounts.has(session.code))) continue;
       try {
         const view = engine.view(session);
-        if (dirtyRooms.has(session.code)) socket.emit('room:state', view);
+        if (socket.data.needsState || dirtyRooms.has(session.code)) socket.emit('room:state', view);
         else socket.emit('room:count', { sessionId: view.sessionId, questionIndex: view.currentQuestionIndex, count: view.answeredCount });
       } catch {
         socket.data.credentials = undefined;
         socket.emit('session:ended', 'Room berakhir atau sesi pemain tidak berlaku lagi.', session.sessionId, session.playerId);
       }
+      socket.data.needsState = false;
     }
     dirtyRooms.clear(); dirtyCounts.clear();
   }
