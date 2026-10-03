@@ -1,6 +1,10 @@
 import type { Metadata, Viewport } from 'next';
+import localFont from 'next/font/local';
 import './globals.css';
 import { AppProviders } from '@/components/providers/AppProviders';
+
+const anybody = localFont({ src: './fonts/anybody-latin.woff2', weight: '100 900', display: 'swap', variable: '--font-anybody-local' });
+const spaceGrotesk = localFont({ src: './fonts/space-grotesk-latin.woff2', weight: '300 700', display: 'swap', variable: '--font-space-local' });
 
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 const appDescription =
@@ -70,7 +74,7 @@ const structuredData = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="id" className="dark">
+    <html lang="id" className={`dark ${anybody.variable} ${spaceGrotesk.variable}`}>
       <head>
         <script
           type="application/ld+json"
