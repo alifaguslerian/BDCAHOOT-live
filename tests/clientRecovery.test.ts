@@ -10,12 +10,16 @@ import { io } from 'socket.io-client';
 import { GameProvider, useGame } from '../context/GameContext';
 import { createSocketServer } from '../server/socketServer';
 import type { Reply, SessionCredentials } from '../types/network';
+import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
+import { SearchParamsContext } from 'next/dist/shared/lib/hooks-client-context.shared-runtime';
+import PlayerJoinPage from '../app/player/join/page';
+import PlayerNamePage from '../app/player/name/page';
 
 const quiz = { id: 'faults', title: 'Recovery test', createdAt: 1, updatedAt: 1,
   questions: Array.from({ length: 3 }, (_, i) => ({ id: `q${i}`, question: `Question ${i}`,
     options: ['A','B','C','D'].map(id => ({ id, text: id })), correctOption: 'B', timerSeconds: 30 })) };
 
-async function fixture() {
+async function fixture(entryPage?: React.ComponentType) {
   let time = 1_800_000_000_000;
   const http = createServer();
   const service = createSocketServer(http, { hostKey: 'fault-test-operator', now: () => time });
@@ -23,19 +27,26 @@ async function fixture() {
   const address = http.address(); assert(address && typeof address !== 'string');
   const url = `http://127.0.0.1:${address.port}`;
   const dom = new JSDOM('<div id="root"></div>', { url, pretendToBeVisual: true });
+  // React was imported before JSDOM; focus would trigger its legacy input polyfill.
+  if (entryPage) dom.window.HTMLElement.prototype.focus = () => {};
   const globals = { window: dom.window, document: dom.window.document, location: dom.window.location,
-    sessionStorage: dom.window.sessionStorage, IS_REACT_ACT_ENVIRONMENT: true };
+    self: dom.window,
+    sessionStorage: dom.window.sessionStorage, localStorage: dom.window.localStorage, IS_REACT_ACT_ENVIRONMENT: true };
   const originals = new Map<string, PropertyDescriptor | undefined>();
   for (const [key, value] of Object.entries(globals)) {
     originals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
     Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
   }
   let state!: ReturnType<typeof useGame>;
+  const navigations: string[] = [];
+  const router = { back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, prefetch: async () => {}, replace: (url: string) => { navigations.push(url); } };
   function Probe() { state = useGame(); return null; }
   let root: Root;
   async function mount() {
     root = createRoot(dom.window.document.getElementById('root')!);
-    await act(async () => { root.render(React.createElement(GameProvider, null, React.createElement(Probe))); });
+    await act(async () => { root.render(React.createElement(AppRouterContext.Provider, { value: router },
+      React.createElement(SearchParamsContext.Provider, { value: new URLSearchParams() },
+        React.createElement(GameProvider, null, React.createElement(Probe), entryPage ? React.createElement(entryPage) : null)))); });
   }
   async function until(predicate: () => boolean, timeout = 10000) {
     const end = performance.now() + timeout;
@@ -47,7 +58,7 @@ async function fixture() {
   const created = await host.timeout(3000).emitWithAck('room:create', { quiz, hostKey: 'fault-test-operator', requestId: randomUUID() }) as Reply<SessionCredentials>;
   assert(created.success);
   await mount(); await until(() => state.connection === 'Terhubung');
-  return { service, host, owner: created.data, dom, get state() { return state; }, until,
+  return { service, host, owner: created.data, dom, navigations, get state() { return state; }, until,
     advance: (ms: number) => { time += ms; service.engine.tick(); },
     remount: async () => { await act(async () => root.unmount()); await mount(); await until(() => state.connection === 'Terhubung'); },
     close: async () => {
@@ -58,6 +69,20 @@ async function fixture() {
       }
     },
   };
+}
+
+for (const [name, page] of [['join', PlayerJoinPage], ['name', PlayerNamePage]] as const) {
+  test(`recovered player on ${name} entry page returns to the active arena`, async () => {
+    const f = await fixture(page);
+    try {
+      await act(async () => { await f.state.joinRoomAsPlayer('ALDI', f.owner.code); });
+      f.service.engine.command(f.owner, { action: 'start', sessionId: f.owner.sessionId, revision: f.service.engine.view(f.owner).revision });
+      await f.until(() => f.state.room.stage === 'QUESTION');
+      f.navigations.length = 0; f.dom.window.sessionStorage.clear();
+      await f.remount();
+      assert(f.navigations.includes(`/player/room/${f.owner.code}`));
+    } finally { await f.close(); }
+  });
 }
 
 test('lost join ACK followed by refresh reuses the same player identity', { timeout: 20000 }, async () => {
@@ -81,6 +106,53 @@ test('lost join ACK followed by refresh reuses the same player identity', { time
     });
     assert.equal(f.state.currentPlayerId, originalPlayer);
     assert.equal(Object.keys(f.service.engine.view(f.owner).players).length, 1);
+  } finally { await f.close(); }
+});
+
+test('player identity and confirmed answer recover after tab storage is lost; explicit leave clears recovery', async () => {
+  const f = await fixture();
+  try {
+    await act(async () => { await f.state.joinRoomAsPlayer('ALDI', f.owner.code); });
+    const id = f.state.currentPlayerId!;
+    f.service.engine.command(f.owner, { action: 'start', sessionId: f.owner.sessionId, revision: f.service.engine.view(f.owner).revision });
+    await f.until(() => f.state.room.stage === 'QUESTION');
+    await act(async () => { assert((await f.state.submitAnswer(id, 'B')).success); });
+    f.dom.window.sessionStorage.clear();
+    await f.remount();
+    assert.equal(f.state.currentPlayerId, id);
+    assert.equal(f.state.answerConfirmed, true);
+    f.service.engine.command(f.owner, { action: 'finish', sessionId: f.owner.sessionId, revision: f.service.engine.view(f.owner).revision });
+    await f.until(() => f.state.room.stage === 'FINAL');
+    await act(async () => { assert(await f.state.leaveRoom()); });
+    f.dom.window.sessionStorage.clear(); await f.remount();
+    assert.equal(f.state.currentPlayerId, null);
+  } finally { await f.close(); }
+});
+
+test('tab Host credentials take precedence over player recovery without erasing its backup', async () => {
+  const f = await fixture();
+  try {
+    await act(async () => { await f.state.joinRoomAsPlayer('ALDI', f.owner.code); });
+    const backup = f.dom.window.localStorage.getItem('bdcahoot_player_recovery');
+    assert(backup);
+    f.dom.window.sessionStorage.setItem('bdcahoot_session', JSON.stringify(f.owner));
+    await f.remount();
+    assert.equal(f.state.role, 'host');
+    assert.equal(f.state.currentPlayerId, null);
+    assert.equal(f.dom.window.localStorage.getItem('bdcahoot_player_recovery'), backup);
+  } finally { await f.close(); }
+});
+
+test('clearing an older player tab does not erase a different player recovery token', async () => {
+  const f = await fixture();
+  try {
+    await act(async () => { await f.state.joinRoomAsPlayer('ALDI', f.owner.code); });
+    const other = f.service.engine.join(f.owner.code, 'BOB', randomUUID());
+    f.dom.window.localStorage.setItem('bdcahoot_player_recovery', JSON.stringify(other));
+    await act(async () => { assert(await f.state.leaveRoom()); });
+    assert.equal(JSON.parse(f.dom.window.localStorage.getItem('bdcahoot_player_recovery')!).token, other.token);
+    f.dom.window.sessionStorage.clear(); await f.remount();
+    assert.equal(f.state.currentPlayerId, other.playerId);
   } finally { await f.close(); }
 });
 
