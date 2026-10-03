@@ -292,3 +292,38 @@ hardware power loss, a filesystem call that never returns, coordinated reconnect
 floods, and physical 50–100-phone/router behavior remain outside this verification.
 A late write can commit after its timeout; recovery uses persisted state, not an
 assumption that missing ACK means lost data. No Git mutations were performed.
+
+## Self-audit follow-up — entry recovery, question clock, resume, sample keys
+
+The four findings were reproduced before changes:
+- Real join/name page components under Next router contexts did not route a recovered
+  player to the active arena. Both entry pages now use ResumePlayerSession; active
+  player identity, ready state, requested room code and explicit leave are checked.
+- A five-second question with a simulated 1.5-second opening commit had only 3.5 seconds
+  remaining at confirmation. Persistence-enabled engines now commit a QUESTION intent
+  with null start/end, reject answers/advancement while preparing, then activate the
+  runtime clock after commit. The active clock is saved with subsequent mutations or
+  checkpoints. A crash before then closes the durable intent to scoreboard as before.
+  Tests cover first/next question, rejecting early submissions, full duration, scoring,
+  and recovery of a prepared intent. Network/publication delay is not eliminated.
+- A player resume caused an unrelated Host to receive a full room broadcast. Binding
+  now flags only that socket for state delivery, while genuine room changes still
+  broadcast normally. Resume ACK reads the view after commit/clock activation.
+- New browser storage was populated with public sample questions and answers. Removed
+  the sample arrays from quizStore and the separate Host management screen. Empty
+  libraries stay empty, and existing local Host quizzes remain intact. Production
+  browser chunks were searched for sample question/title markers with no matches.
+  This does not make previously published sample material secret again.
+
+Verification: 51/51 tests passed; production build, lint and typecheck passed.
+The entry-page tests use React/JSDOM with actual page components and a router test
+adapter, not a physical Android/iOS browser. Existing 100-socket/40-question regression
+and SQLite crash tests also passed. No claim of universal event readiness or zero lag.
+
+Production browser smoke: `npm run test:endurance -- --browser --players=100
+--questions=3 --seconds=5 --database=reports/self-audit-fixes-smoke.sqlite
+--report=reports/self-audit-fixes-smoke.json` passed in 52.84 seconds. This used 99 bots,
+one Chromium player and a Chromium Host with SQLite enabled; 300 accepted answers,
+zero unexpected disconnects, no page/console errors, and zero rooms/sockets after cleanup.
+Player CPU was throttled 4×. This is a three-question functional smoke test, not a
+repeat of the 40-question duration benchmark or proof of 100 physical-phone capacity.
