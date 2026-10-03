@@ -10,10 +10,10 @@ const quiz = { id: 'test', title: 'Transport test', createdAt: 1, updatedAt: 1,
   questions: Array.from({ length: 40 }, (_, i) => ({ id: `q${i}`, question: `Question ${i}`,
     options: ['A','B','C','D'].map(id => ({ id, text: id })), correctOption: 'B', timerSeconds: 5 })) };
 
-async function fixture() {
+async function fixture(maxConnectionsPerAddress?: number) {
   let time = 1_800_000_000_000;
   const http = createServer();
-  const service = createSocketServer(http, { hostKey: 'test-operator-key', now: () => time });
+  const service = createSocketServer(http, { hostKey: 'test-operator-key', now: () => time, maxConnectionsPerAddress });
   await new Promise<void>(resolve => http.listen(0, '127.0.0.1', resolve));
   const address = http.address();
   assert(address && typeof address !== 'string');
@@ -37,6 +37,52 @@ async function request<T>(socket: Socket, event: string, payload: unknown): Prom
   return reply.data;
 }
 const resume = (socket: Socket, credentials: SessionCredentials) => request<RoomView>(socket, 'session:resume', credentials);
+
+test('resuming a player only refreshes that connection, not the whole room', async () => {
+  const f = await fixture();
+  try {
+    const host = await f.connect(), player = await f.connect();
+    const owner = await request<SessionCredentials>(host, 'room:create', { quiz, hostKey: 'test-operator-key' });
+    const identity = await request<SessionCredentials>(player, 'room:join', { code: owner.code, name: 'ANA', requestId: randomUUID() });
+    await new Promise(resolve => setTimeout(resolve, 150));
+    let broadcasts = 0;
+    host.on('room:state', () => { broadcasts++; });
+    assert.equal((await resume(player, identity)).code, owner.code);
+    await new Promise(resolve => setTimeout(resolve, 150));
+    assert.equal(broadcasts, 0);
+  } finally { await f.close(); }
+});
+
+test('per-address connection cap rejects excess and releases capacity on disconnect', async () => {
+  const f = await fixture(2);
+  const extra = io(f.url, { autoConnect: false, transports: ['websocket'], reconnection: false });
+  try {
+    const first = await f.connect(); await f.connect();
+    const rejected = new Promise<void>((resolve, reject) => {
+      extra.once('connect_error', () => resolve()); extra.once('connect', () => reject(Error('Excess connection accepted')));
+    });
+    extra.connect(); await rejected;
+    first.disconnect();
+    await new Promise(resolve => setTimeout(resolve, 30));
+    const replacement = await f.connect();
+    assert(replacement.connected);
+  } finally { extra.disconnect(); await f.close(); }
+});
+
+test('one bound player connection cannot register extra players but can retry and leave', async () => {
+  const f = await fixture();
+  try {
+    const host = await f.connect(), player = await f.connect();
+    const owner = await request<SessionCredentials>(host, 'room:create', { quiz, hostKey: 'test-operator-key' });
+    const packet = { code: owner.code, name: 'ANA', requestId: randomUUID() };
+    const identity = await request(player, 'room:join', packet);
+    assert.deepEqual(await request(player, 'room:join', packet), identity);
+    await assert.rejects(request(player, 'room:join', { ...packet, name: 'BOB', requestId: randomUUID() }));
+    assert.equal(Object.keys((await resume(host, owner)).players).length, 1);
+    await request(player, 'room:leave', {});
+    await request(player, 'room:join', { ...packet, name: 'BOB', requestId: randomUUID() });
+  } finally { await f.close(); }
+});
 
 test('foreign browser origin and oversized packets are rejected while healthy clients remain usable', async () => {
   const f = await fixture();
