@@ -12,6 +12,13 @@ const SESSION_KEY = 'bdcahoot_session';
 const ANSWER_KEY = 'bdcahoot_submission';
 const CREATE_KEY = 'bdcahoot_creation_request';
 const JOIN_KEY = 'bdcahoot_join_request';
+const PLAYER_RECOVERY_KEY = 'bdcahoot_player_recovery';
+function recoveredPlayer(): SessionCredentials | null {
+  try {
+    const value = JSON.parse(localStorage.getItem(PLAYER_RECOVERY_KEY) || 'null');
+    return value?.role === 'player' && typeof value.token === 'string' && typeof value.sessionId === 'string' && typeof value.code === 'string' && typeof value.playerId === 'string' ? value : null;
+  } catch { return null; }
+}
 function requestId() { return Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join(''); }
 type Submission = { request: SubmitRequest; receipt?: AnswerReceipt };
 function readSaved<T>(key: string): T | null { try { return JSON.parse(sessionStorage.getItem(key) || 'null'); } catch { return null; } }
@@ -53,10 +60,14 @@ function useGameState() {
   function remember(value: SessionCredentials) {
     leaving.current = false; setLeaving(false);
     credentials.current = value; save(SESSION_KEY, value); setPlayerId(value.playerId || null); setRole(value.role);
+    if (value.role === 'player') { try { localStorage.setItem(PLAYER_RECOVERY_KEY, JSON.stringify(value)); } catch { /* Tab storage remains available when persistent storage is blocked. */ } }
     if (submissionRef.current?.request.sessionId !== value.sessionId) storeSubmission(null);
   }
   function clearSession() {
     authenticated.current = false;
+    if (credentials.current?.role === 'player' && recoveredPlayer()?.token === credentials.current.token) {
+      try { localStorage.removeItem(PLAYER_RECOVERY_KEY); } catch { /* Storage may be blocked. */ }
+    }
     credentials.current = null; save(SESSION_KEY, null); storeSubmission(null); setPlayerId(null); setRole(null); roomRef.current = EMPTY_ROOM; setRoom(EMPTY_ROOM);
   }
   async function transmit(saved: Submission): Promise<Reply<AnswerReceipt>> {
@@ -71,7 +82,7 @@ function useGameState() {
   useEffect(() => {
     const socket: Socket<ServerEvents, ClientEvents> = io({ autoConnect: false });
     socketRef.current = socket;
-    const saved = readSaved<SessionCredentials>(SESSION_KEY);
+    const saved = readSaved<SessionCredentials>(SESSION_KEY) ?? recoveredPlayer();
     submissionRef.current = readSaved<Submission>(ANSWER_KEY); setSubmission(submissionRef.current);
     if (saved) remember(saved);
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
