@@ -2,6 +2,9 @@
 
 Kuis multiplayer di jaringan lokal: Host buat room, pemain masuk dengan kode, soal, pembahasan, scoreboard setiap ronde, dan podium akhir.
 
+Untuk acara: [panduan operator dan backup](docs/OPERASIONAL.md),
+[checklist rehearsal HP/router](docs/REHEARSAL.md), dan [status progres](docs/ROADMAP.md).
+
 ## Menjalankan
 
 Gunakan Node.js 22.22.2+ (seri 22), 24.15.0+ (seri 24), atau 26+. Versi minimum ini juga memenuhi kebutuhan lingkungan DOM pengujian. Instal dan build sebelum acara saat Internet tersedia:
@@ -21,11 +24,11 @@ Pengembangan: `npm run dev`. `PORT` mengubah port; `HOST_KEY` menetapkan kode op
 ## Batas operasional
 
 - Server menyimpan pertandingan ke SQLite lokal (`data/game.sqlite`, dapat diubah lewat `DATABASE_PATH`). Satu proses server per database. Jangan menutup terminal atau membiarkan laptop tidur saat pertandingan; restart akan mengakhiri soal yang sedang aktif dan memulihkannya ke scoreboard.
-- Reconnect memulihkan sesi pada tab yang sama melalui sessionStorage. Menutup tab atau menghapus penyimpanan dapat menghilangkan identitas pemain.
+- Sesi aktif dipisahkan per tab melalui sessionStorage. Token pemain terakhir juga dicadangkan di localStorage agar tab baru pada profil/origin yang sama dapat memulihkan pemain dan receipt server. Host tetap memakai tab asal. Menghapus site data atau berganti browser/origin dapat menghilangkan identitas.
 - Batas: 150 pemain/room, 200 soal/kuis, payload kuis maksimal 200 KiB, 16 room aktif. Room kedaluwarsa setelah enam jam tanpa aktivitas terautentikasi.
 - Firewall perlu mengizinkan port server di jaringan privat. Wi-Fi guest dengan client isolation dapat menghalangi akses ke laptop.
 - HTTP lokal ditujukan untuk LAN tepercaya. Tidak melindungi token dari penyadap jaringan; gunakan TLS untuk jaringan tidak tepercaya. Jangan expose langsung ke Internet.
-- Gameplay tidak bergantung Internet. Google Fonts opsional dengan fallback font lokal.
+- Gameplay dan font tidak bergantung Internet. Font WOFF2 dimuat dari server LAN, dengan fallback font sistem.
 - Ranking: skor, total durasi jawaban server, lalu urutan bergabung. Latensi Wi-Fi ikut memengaruhi waktu penerimaan; nol delay tidak dijanjikan.
 
 ## Pemulihan pertandingan (9A)
@@ -35,14 +38,22 @@ Penulisan berjalan di worker dan perubahan yang berdekatan dapat digabung dalam 
 snapshot. Server menyimpan room, urutan soal, token Host/pemain, jawaban, receipt retry,
 skor, urutan bergabung, dan penghapusan room. Snapshot tidak dikirim ke browser.
 
+Pembukaan soal disimpan dahulu sebagai QUESTION yang belum memiliki waktu mulai.
+Setelah commit selesai, server mengaktifkan jam soal sebelum mengirimnya ke pemain;
+waktu menunggu commit pembukaan tidak memakan durasi menjawab. Clock aktif ikut snapshot
+berikutnya. Bila server crash sebelum snapshot berikutnya, intent QUESTION tersimpan
+tetap dipulihkan ke scoreboard, bukan membuka ulang soal. Latensi pengiriman LAN tetap ada.
+
 Setelah restart dengan database yang sama:
 
 - LOBBY, SCOREBOARD dan FINAL kembali ke tahap tersimpan.
 - QUESTION/REVEAL dipulihkan ke SCOREBOARD soal tersebut. Jawaban tersimpan tetap
   dihitung, pemain yang belum menjawab tidak mendapat poin, dan penalti waktu untuk
   tie-break diterapkan satu kali. Host melanjutkan ke soal berikutnya secara manual.
-- Pemain/Host kembali memakai URL, origin dan tab yang sama, dengan sessionStorage
-  masih ada. Token/kode room tetap berlaku untuk room yang belum kedaluwarsa. Database
+- Host kembali memakai URL, origin dan tab yang sama, dengan sessionStorage
+  masih ada. Pemain dapat memakai cadangan lokal pada profil/origin yang sama bila tab hilang.
+  Hanya pemain terakhir yang memiliki cadangan per origin; untuk banyak pemain pada satu
+  perangkat, gunakan profil browser terpisah. Token/kode room tetap berlaku untuk room yang belum kedaluwarsa. Database
   tidak mengembalikan token browser yang sudah dihapus. HOST_KEY yang tetap memudahkan
   retry pembuatan room setelah restart; token Host room lama tidak bergantung key baru.
 - Room tanpa aktivitas tetap kedaluwarsa setelah enam jam. Aktivitas terakhir disimpan
@@ -155,3 +166,8 @@ jangan arahkan benchmark ke database pertandingan acara.
 - tests/: pengujian kode produksi.
 
 Editor tetap menyimpan kuis di localStorage browser Host. BroadcastChannel, grid simulator dan tes yang menduplikasi logika produksi telah diganti.
+
+Browser baru mulai dengan library kosong; materi kuis contoh dan kuncinya tidak lagi
+disisipkan ke bundle publik. Kuis di localStorage Host yang sudah ada tidak dihapus.
+Jangan gunakan kuis contoh dari versi lama sebagai materi kompetisi rahasia, karena
+materi itu pernah tersedia publik. Buat soal sendiri sebelum acara.
