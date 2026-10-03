@@ -7,6 +7,7 @@ import { User, ArrowRight, ArrowLeft, AlertCircle, CheckCircle2 } from 'lucide-r
 import { useGame } from '@/context/GameContext';
 import { sound } from '@/lib/soundFX';
 import { validatePlayerName } from '@/lib/validation';
+import { ResumePlayerSession } from '@/components/player/ResumePlayerSession';
 
 function PlayerNameContent() {
   const router = useRouter();
@@ -53,6 +54,7 @@ function PlayerNameContent() {
 
   return (
     <div className="w-full max-w-sm flex flex-col gap-6">
+      <ResumePlayerSession requestedCode={roomCode} />
       {/* Header */}
       <div className="text-center flex flex-col items-center">
         <div className="w-12 h-12 rounded-xl bg-[#1d2026] border border-[#272a31] flex items-center justify-center text-[#ffc880] mb-4 shadow-md">
