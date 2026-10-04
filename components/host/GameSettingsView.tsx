@@ -15,7 +15,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { Quiz } from '@/types/quiz';
-import { getQuizById } from '@/lib/quizStore';
+import { loadQuiz, getOperatorKey } from '@/lib/quizStore';
 import { validateQuiz } from '@/lib/validation';
 import { useGame } from '@/context/GameContext';
 import { sound } from '@/lib/soundFX';
@@ -37,13 +37,17 @@ export function GameSettingsView({ quizId }: GameSettingsViewProps) {
   const [previewRoomCode, setPreviewRoomCode] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [hostKey, setHostKey] = useState('');
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
-    // Browser storage and the random preview must not participate in SSR hydration.
+    let active = true;
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setQuiz(getQuizById(quizId));
+    setHostKey(getOperatorKey());
+    loadQuiz(quizId).then(quiz => { if (active) setQuiz(quiz); })
+      .catch(error => { if (active) setLoadError(error.message); })
+      .finally(() => { if (active) setLoaded(true); });
     setPreviewRoomCode(generateRoomCode());
-    setLoaded(true);
+    return () => { active = false; };
   }, [quizId]);
 
   if (!loaded) return <div className="min-h-screen bg-[#0b0e14] text-white p-12 text-center">Memuat kuis…</div>;
@@ -53,7 +57,7 @@ export function GameSettingsView({ quizId }: GameSettingsViewProps) {
       <div className="min-h-screen bg-[#0b0e14] text-[#e1e2eb] flex flex-col items-center justify-center p-6 text-center font-space">
         <h2 className="font-anybody text-xl font-bold uppercase mb-2">Kuis Tidak Ditemukan</h2>
         <p className="text-sm text-[#8b93a1] mb-6">
-          Kuis dengan ID `{quizId}` tidak ada di penyimpanan lokal.
+          {loadError || `Kuis dengan ID ${quizId} tidak ada di database server.`}
         </p>
         <Link
           href="/host/library"
