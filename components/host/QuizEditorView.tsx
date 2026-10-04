@@ -17,7 +17,7 @@ import {
   Check,
 } from 'lucide-react';
 import { Quiz, OptionId, QuizQuestion } from '@/types/quiz';
-import { getQuizById, saveQuiz, createNewQuestion } from '@/lib/quizStore';
+import { loadQuiz, saveQuiz, createNewQuestion } from '@/lib/quizStore';
 import { validateQuiz } from '@/lib/validation';
 import { OPTION_CONFIGS, TIMER_PRESETS } from '@/lib/constants';
 import { sound } from '@/lib/soundFX';
@@ -31,31 +31,66 @@ export function QuizEditorView({ quizId }: QuizEditorViewProps) {
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
-  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving'>('saved');
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
+  const [saveError, setSaveError] = useState('');
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const pending = useRef<Quiz | null>(null);
+  const revision = useRef(0);
+  const writing = useRef<Promise<boolean> | null>(null);
+
+  const flushSave = useCallback((): Promise<boolean> => {
+    clearTimeout(saveTimer.current);
+    if (writing.current) return writing.current;
+    writing.current = (async () => {
+      while (pending.current) {
+        const updated = pending.current;
+        pending.current = null;
+        try {
+          const saved = await saveQuiz({ ...updated, updatedAt: revision.current });
+          revision.current = saved.updatedAt;
+          setQuiz(current => current ? { ...current, updatedAt: saved.updatedAt } : current);
+        } catch (error) {
+          pending.current ??= updated;
+          setSaveStatus('error');
+          setSaveError(error instanceof Error ? error.message : 'Kuis belum tersimpan.');
+          return false;
+        }
+      }
+      setSaveStatus('saved'); setSaveError('');
+      return true;
+    })().finally(() => { writing.current = null; });
+    return writing.current;
+  }, []);
 
   useEffect(() => {
-    // Local drafts exist only in the browser; never create or save them during SSR.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setQuiz(getQuizById(quizId));
-    setLoaded(true);
-    return () => clearTimeout(saveTimer.current);
-  }, [quizId]);
+    let active = true;
+    loadQuiz(quizId).then(loadedQuiz => {
+      if (!active) return;
+      revision.current = loadedQuiz?.updatedAt ?? 0;
+      setQuiz(loadedQuiz); setLoaded(true);
+    }).catch(error => { if (active) { setSaveError(error.message); setLoaded(true); } });
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      if (pending.current || writing.current) { event.preventDefault(); event.returnValue = ''; }
+    };
+    window.addEventListener('beforeunload', beforeUnload);
+    return () => {
+      active = false; clearTimeout(saveTimer.current);
+      window.removeEventListener('beforeunload', beforeUnload);
+      if (pending.current) void flushSave();
+    };
+  }, [quizId, flushSave]);
 
-  // Persist helper
   const triggerAutoSave = useCallback((updated: Quiz) => {
-    setSaveStatus('saving');
-    saveQuiz(updated);
+    pending.current = updated;
+    setSaveStatus('saving'); setSaveError('');
     clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      setSaveStatus('saved');
-    }, 400);
-  }, []);
+    saveTimer.current = setTimeout(() => { void flushSave(); }, 400);
+  }, [flushSave]);
 
   if (!quiz) {
     return (
       <div className="min-h-screen bg-[#0b0e14] text-[#e1e2eb] flex items-center justify-center font-space">
-        {loaded ? <Link href="/host/library">Kuis tidak ditemukan. Kembali ke Library</Link> : 'Memuat editor kuis...'}
+        {loaded ? <Link href="/host/library">{saveError || 'Kuis tidak ditemukan. Kembali ke Library'}</Link> : 'Memuat editor kuis...'}
       </div>
     );
   }
@@ -166,7 +201,7 @@ export function QuizEditorView({ quizId }: QuizEditorViewProps) {
           <Link
             id="btn-back-to-library"
             href="/host/library"
-            onClick={() => sound.playTap()}
+            onClick={async event => { event.preventDefault(); sound.playTap(); if (await flushSave()) router.push('/host/library'); }}
             className="w-9 h-9 rounded-lg bg-[#151a22] border border-[#272a31] flex items-center justify-center text-[#d7c3ae] hover:text-white hover:border-[#ffc880] transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -184,7 +219,7 @@ export function QuizEditorView({ quizId }: QuizEditorViewProps) {
         {/* Autosave Status Indicator & Action */}
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 text-xs font-space">
-            {saveStatus === 'saving' ? (
+            {saveStatus === 'error' ? <button type="button" className="text-[#ffb4ab] min-h-12" onClick={() => { void flushSave(); }}>Belum tersimpan — coba lagi</button> : saveStatus === 'saving' ? (
               <span className="text-[#ffc880] flex items-center gap-1.5 animate-pulse">
                 <Save className="w-3.5 h-3.5" />
                 <span>Menyimpan...</span>
@@ -200,9 +235,9 @@ export function QuizEditorView({ quizId }: QuizEditorViewProps) {
           <button
             id="btn-go-to-settings"
             type="button"
-            onClick={() => {
+            onClick={async () => {
               sound.playTap();
-              router.push(`/host/quiz/${quiz.id}/settings`);
+              if (await flushSave()) router.push(`/host/quiz/${quiz.id}/settings`);
             }}
             className="h-9 px-4 rounded-lg bg-[#f5a623] hover:bg-[#ffc880] text-[#452b00] font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-colors shadow-md"
           >
@@ -212,6 +247,7 @@ export function QuizEditorView({ quizId }: QuizEditorViewProps) {
         </div>
       </header>
 
+      {saveError && <p role="alert" className="p-4 text-[#ffb4ab]">{saveError}</p>}
       {/* Main Content Layout: Sidebar Soal + Canvas Editor Soal */}
       <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col md:flex-row gap-6">
         {/* Left Sidebar: List of Soal */}
