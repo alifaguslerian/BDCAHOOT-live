@@ -16,7 +16,7 @@ import {
   Search,
 } from 'lucide-react';
 import { Quiz } from '@/types/quiz';
-import { getStoredQuizzes, deleteQuiz, createNewDraftQuiz } from '@/lib/quizStore';
+import { getStoredQuizzes, deleteQuiz, createNewDraftQuiz, saveQuiz, refreshQuizzes as loadLibrary } from '@/lib/quizStore';
 import { validateQuiz } from '@/lib/validation';
 import { sound } from '@/lib/soundFX';
 
@@ -25,33 +25,42 @@ export default function HostLibraryPage() {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
 
   const refreshQuizzes = () => {
     setQuizzes(getStoredQuizzes());
   };
 
   useEffect(() => {
-    // Read browser-only storage after hydration; SSR starts with the same empty list.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setQuizzes(getStoredQuizzes());
     const handleStorageChange = () => {
       setQuizzes(getStoredQuizzes());
     };
     window.addEventListener('bdcahoot:quizzes-changed', handleStorageChange);
+    void loadLibrary().catch(error => setError(error.message));
     return () => window.removeEventListener('bdcahoot:quizzes-changed', handleStorageChange);
   }, []);
 
-  const handleCreateNew = () => {
+  const handleCreateNew = async () => {
+    if (busy) return;
+    setBusy(true); setError('');
     sound.playTap();
-    const draft = createNewDraftQuiz();
-    router.push(`/host/quiz/${draft.id}/edit`);
+    try {
+      const draft = await saveQuiz(createNewDraftQuiz());
+      router.push(`/host/quiz/${draft.id}/edit`);
+    } catch (error) { setError(error instanceof Error ? error.message : 'Kuis belum tersimpan.'); }
+    finally { setBusy(false); }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    if (busy) return;
+    setBusy(true); setError('');
     sound.playError();
-    deleteQuiz(id);
-    setDeleteConfirmId(null);
-    refreshQuizzes();
+    try { await deleteQuiz(id); setDeleteConfirmId(null); refreshQuizzes(); }
+    catch (error) { setError(error instanceof Error ? error.message : 'Kuis belum dihapus.'); setDeleteConfirmId(null); }
+    finally { setBusy(false); }
   };
 
   const filteredQuizzes = quizzes.filter((q) =>
@@ -82,19 +91,11 @@ export default function HostLibraryPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <Link
-            id="btn-studio-console"
-            href="/host/manage"
-            onClick={() => sound.playTap()}
-            className="h-10 px-3.5 rounded-lg bg-[#1d2026] hover:bg-[#272a31] border border-[#272a31] text-[#ffc880] hover:text-[#ffddb4] font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-colors"
-          >
-            <Layers className="w-4 h-4" />
-            <span>Studio Console</span>
-          </Link>
           <button
             id="btn-create-quiz-header"
             type="button"
             onClick={handleCreateNew}
+            disabled={busy}
             className="h-10 px-4 rounded-lg bg-[#f5a623] hover:bg-[#ffc880] text-[#452b00] font-bold text-sm uppercase tracking-wider flex items-center gap-2 transition-colors shadow-md"
           >
             <Plus className="w-4 h-4 stroke-[2.5]" />
@@ -105,6 +106,7 @@ export default function HostLibraryPage() {
 
       {/* Main Container */}
       <main className="flex-1 w-full max-w-6xl mx-auto px-6 lg:px-12 py-8 flex flex-col">
+        {error && <p role="alert" className="mb-4 text-[#ffb4ab]">{error}</p>}
         {/* Page Title & Search Filter */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
@@ -143,6 +145,7 @@ export default function HostLibraryPage() {
             </p>
             <button
               onClick={handleCreateNew}
+            disabled={busy}
               className="py-2.5 px-5 rounded-lg bg-[#f5a623] hover:bg-[#ffc880] text-[#452b00] font-bold text-sm uppercase tracking-wider flex items-center gap-2 transition-colors shadow-md"
             >
               <Plus className="w-4 h-4 stroke-[2.5]" />
@@ -284,7 +287,7 @@ export default function HostLibraryPage() {
             </h3>
             <p className="text-xs text-[#d7c3ae] mb-6 leading-relaxed">
               Tindakan ini tidak dapat dibatalkan. Kuis dan semua soal di dalamnya akan dihapus dari
-              penyimpanan lokal host.
+              database server.
             </p>
             <div className="flex items-center justify-end gap-3">
               <button
