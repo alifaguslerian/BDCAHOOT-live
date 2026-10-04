@@ -8,5 +8,5 @@ interface PageProps {
 export default async function GameSettingsPage({ params }: PageProps) {
   const { id } = await params;
 
-  return <GameSettingsView quizId={id} />;
+  return <GameSettingsView key={id} quizId={id} />;
 }
