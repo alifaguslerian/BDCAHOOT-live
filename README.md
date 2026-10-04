@@ -15,7 +15,7 @@ npm run build
 npm start
 ```
 
-Terminal menampilkan URL lokal, alamat LAN, dan kode operator. Host membuka URL lokal, memilih kuis, memasukkan kode operator lalu membuat room. Pemain membuka alamat LAN yang tercetak (contoh http://192.168.1.10:3000/player/join) dari Wi-Fi yang sama. Bagikan kode room, bukan kode operator.
+Terminal menampilkan URL lokal, alamat LAN, dan kode operator. Host membuka URL lokal, memasukkan kode operator untuk membuka koleksi kuis, memilih kuis lalu membuat room. Pemain membuka alamat LAN yang tercetak (contoh http://192.168.1.10:3000/player/join) dari Wi-Fi yang sama. Bagikan kode room, bukan kode operator.
 
 Setelah pemain masuk, Host menekan Mulai Game. Server menutup jawaban setelah deadline + toleransi 200 ms. Pembahasan 3-5 detik dilanjutkan scoreboard. Host melanjutkan soal berikutnya atau menampilkan podium setelah soal terakhir.
 
@@ -165,9 +165,19 @@ jangan arahkan benchmark ke database pertandingan acara.
 - types/network.ts: kontrak transport.
 - tests/: pengujian kode produksi.
 
-Editor tetap menyimpan kuis di localStorage browser Host. BroadcastChannel, grid simulator dan tes yang menduplikasi logika produksi telah diganti.
+Koleksi kuis dan draft editor disimpan di tabel `quizzes` dalam SQLite server (`data/game.sqlite`, mengikuti `DATABASE_PATH`). Pindah Wi-Fi/IP atau browser tidak mengganti koleksi selama terhubung ke server dengan file database yang sama. Semua operasi koleksi membutuhkan kode operator; kunci jawaban tidak tersedia ke pemain melalui koleksi. Kode operator diingat di sessionStorage tab sampai ditutup. Jika server mengganti kode saat restart, buka ulang halaman dan masukkan kode baru.
 
-Browser baru mulai dengan library kosong; materi kuis contoh dan kuncinya tidak lagi
-disisipkan ke bundle publik. Kuis di localStorage Host yang sudah ada tidak dihapus.
+Saat membuka koleksi dari browser/alamat lama, aplikasi otomatis mengimpor kuis localStorage. Setelah seluruh impor dikonfirmasi server, data lama diarsipkan ke `bdcahoot_quiz_library_v1_backup`; kegagalan tetap mempertahankan data sumber. Impor tidak menimpa ID yang sudah ada di server dan tidak menghidupkan kembali kuis yang dihapus. Browser tidak bisa membaca penyimpanan dari origin lain: buka alamat lama sekali untuk memindahkan kuis yang dibuat di sana. Simpan salinan backup browser bila ada konflik ID yang perlu dipulihkan manual.
+
+Editor menunggu konfirmasi database sebelum menampilkan status tersimpan. Autosave digabung selama 400 ms; tombol kembali/pengaturan menunggu penyimpanan selesai. Koneksi putus atau konflik edit dua tab menampilkan error, bukan status sukses. Tunggu “Tersimpan otomatis” sebelum menutup tab. Dua tab dengan versi berbeda tidak boleh saling menimpa; muat ulang tab lama sebelum melanjutkan. Batas koleksi 500 kuis aktif, 200 soal/kuis, 200 KiB/kuis. Draft boleh belum lengkap; validasi bermain tetap diterapkan saat membuat room. `/host/manage` mengarah ke editor koleksi yang sama agar tidak ada jalur draft sementara terpisah.
+
+Untuk backup kuis beserta pertandingan, hentikan server lalu salin file database ke lokasi cadangan. SQLite tetap lokal, bukan cloud: memindah server ke laptop lain membutuhkan file database tersebut. File ini juga mengandung token pertandingan; jangan bagikan ke pemain.
+
+Tes browser produksi: setelah `npm run build`, jalankan `python scripts/check-quiz-library.py` (Chrome + Playwright seperti tes endurance). Menggunakan database sementara; menguji edit, navigasi sebelum debounce, konflik dua tab, offline/retry, restart, origin berbeda, dan pembuatan room. Laporan tersimpan di `reports/quiz-library-browser.json`.
+
+BroadcastChannel, grid simulator dan tes yang menduplikasi logika produksi telah diganti.
+
+Database baru mulai dengan library kosong; materi kuis contoh dan kuncinya tidak lagi
+disisipkan ke bundle publik. Kuis localStorage Host dimigrasikan dengan cadangan seperti dijelaskan di atas.
 Jangan gunakan kuis contoh dari versi lama sebagai materi kompetisi rahasia, karena
 materi itu pernah tersedia publik. Buat soal sendiri sebelum acara.
