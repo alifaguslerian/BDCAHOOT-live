@@ -8,5 +8,5 @@ interface PageProps {
 export default async function QuizEditorPage({ params }: PageProps) {
   const { id } = await params;
 
-  return <QuizEditorView quizId={id} />;
+  return <QuizEditorView key={id} quizId={id} />;
 }
