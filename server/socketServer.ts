@@ -4,6 +4,7 @@ import { Server, type Socket } from 'socket.io';
 import { GameEngine } from './gameEngine';
 import { serialize, deserialize } from 'node:v8';
 import type { Persistence } from './persistence';
+import { parseLibraryRequest } from './quizLibrary';
 import type { ClientEvents, ServerEvents, SessionCredentials, Reply } from '../types/network';
 
 interface ConnectionData { credentials?: SessionCredentials; tokens: number; refillAt: number; pending: number; needsState?: boolean }
@@ -110,30 +111,38 @@ export function createSocketServer(http: HttpServer, options: Options) {
     socket.data.tokens--;
     return true;
   }
-  async function handle<T>(socket: GameSocket, ack: ((reply: Reply<T>) => void) | undefined, operation: () => T, committedResult?: () => T) {
+  async function handle<T>(socket: GameSocket, ack: ((reply: Reply<T>) => void) | undefined, operation: () => T | Promise<T>, committedResult?: () => T) {
     if (typeof ack !== 'function') return;
     if (storageFailure || closing) { ack({ success: false, error: 'Penyimpanan tidak tersedia. Tunggu server pulih.', code: 'UNKNOWN' }); return; }
     if (!takeToken(socket)) { ack({ success: false, error: 'Terlalu banyak permintaan. Coba lagi sebentar.', code: 'RATE_LIMIT' }); return; }
     if (socket.data.pending >= 8 || pendingRequests >= 1000) { ack({ success: false, error: 'Server sedang menyimpan. Coba lagi sebentar.', code: 'RATE_LIMIT' }); return; }
     socket.data.pending++; pendingRequests++;
-    try { const data = operation(); await flush(); ack({ success: true, data: committedResult ? committedResult() : data }); }
+    try { const operationResult = operation(); const data = operationResult instanceof Promise ? await operationResult : operationResult; await flush(); ack({ success: true, data: committedResult ? committedResult() : data }); }
     catch (error) { ack({ success: false, error: storageFailure ? 'Konfirmasi penyimpanan gagal. Tunggu server pulih.' : error instanceof Error ? error.message : 'Permintaan tidak valid.', ...(storageFailure ? { code: 'UNKNOWN' } : {}) }); }
     finally { socket.data.pending--; pendingRequests--; }
+  }
+  function authorizeOperator(socket: GameSocket, hostKey: unknown) {
+    const address = socket.handshake.address;
+    const failure = operatorFailures.get(address);
+    if (failure && failure.expires > Date.now() && failure.count >= 10) throw Error('Terlalu banyak kode operator salah. Tunggu satu menit.');
+    const actual = Buffer.from(typeof hostKey === 'string' ? hostKey : '');
+    const expected = Buffer.from(options.hostKey);
+    if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
+      operatorFailures.set(address, { count: failure && failure.expires > Date.now() ? failure.count + 1 : 1, expires: Date.now() + 60000 });
+      throw Error('Kode operator tidak valid. Lihat terminal server Host.');
+    }
   }
   io.on('connection', socket => {
     socket.data.tokens = 200;
     socket.data.pending = 0;
     socket.data.refillAt = performance.now();
+    socket.on('library:request', (payload, ack) => handle(socket, ack, () => {
+      authorizeOperator(socket, payload?.hostKey);
+      if (!options.persistence?.library) throw Error('Penyimpanan kuis server tidak tersedia.');
+      return options.persistence.library(parseLibraryRequest(payload));
+    }));
     socket.on('room:create', (payload, ack) => handle(socket, ack, () => {
-      const address = socket.handshake.address;
-      const failure = operatorFailures.get(address);
-      if (failure && failure.expires > Date.now() && failure.count >= 10) throw Error('Terlalu banyak kode operator salah. Tunggu satu menit.');
-      const actual = Buffer.from(typeof payload?.hostKey === 'string' ? payload.hostKey : '');
-      const expected = Buffer.from(options.hostKey);
-      if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
-        operatorFailures.set(address, { count: failure && failure.expires > Date.now() ? failure.count + 1 : 1, expires: Date.now() + 60000 });
-        throw Error('Kode operator tidak valid. Lihat terminal server Host.');
-      }
+      authorizeOperator(socket, payload?.hostKey);
       if (typeof payload.requestId !== 'string' || !/^[a-zA-Z0-9_-]{16,100}$/.test(payload.requestId)) throw Error('ID pembuatan room tidak valid.');
       const fingerprint = createHash('sha256').update(JSON.stringify([payload.quiz, payload.settings])).digest('hex');
       const previous = creations.get(payload.requestId);
