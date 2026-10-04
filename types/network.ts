@@ -1,5 +1,6 @@
 import type { GameRoomSettings, GameStage, Player, ScoreboardRankItem, OptionDistribution } from './game';
 import type { Quiz, QuizQuestion, OptionId } from './quiz';
+import type { LibraryRequest, LibraryResult } from './quizLibrary';
 
 export type PublicQuestion = Omit<QuizQuestion, 'correctOption'> & { correctOption?: OptionId };
 export interface RoomView {
@@ -27,6 +28,7 @@ export type Reply<T = undefined> = { success: true; data: T } | { success: false
 export interface SubmitRequest { sessionId: string; questionIndex: number; submissionId: string; option: OptionId }
 export interface HostCommand { sessionId: string; revision: number; action: 'start' | 'next' | 'finish' | 'reveal' | 'scoreboard' | 'reset' | 'kick'; playerId?: string }
 export interface ClientEvents {
+  'library:request': (payload: LibraryRequest & { hostKey: string }, ack: (reply: Reply<LibraryResult>) => void) => void;
   'room:leave': (payload: Record<string, never>, ack: (reply: Reply) => void) => void;
   'room:create': (payload: { quiz: Quiz; settings?: Partial<GameRoomSettings>; hostKey: string; requestId: string }, ack: (reply: Reply<SessionCredentials>) => void) => void;
   'room:inspect': (payload: { code: string }, ack: (reply: Reply<{ code: string; stage: GameStage }>) => void) => void;
