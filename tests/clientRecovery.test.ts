@@ -77,6 +77,7 @@ for (const [name, page] of [['join', PlayerJoinPage], ['name', PlayerNamePage]] 
     try {
       await act(async () => { await f.state.joinRoomAsPlayer('ALDI', f.owner.code); });
       f.service.engine.command(f.owner, { action: 'start', sessionId: f.owner.sessionId, revision: f.service.engine.view(f.owner).revision });
+    f.advance(5000);
       await f.until(() => f.state.room.stage === 'QUESTION');
       f.navigations.length = 0; f.dom.window.sessionStorage.clear();
       await f.remount();
@@ -115,6 +116,7 @@ test('player identity and confirmed answer recover after tab storage is lost; ex
     await act(async () => { await f.state.joinRoomAsPlayer('ALDI', f.owner.code); });
     const id = f.state.currentPlayerId!;
     f.service.engine.command(f.owner, { action: 'start', sessionId: f.owner.sessionId, revision: f.service.engine.view(f.owner).revision });
+    f.advance(5000);
     await f.until(() => f.state.room.stage === 'QUESTION');
     await act(async () => { assert((await f.state.submitAnswer(id, 'B')).success); });
     f.dom.window.sessionStorage.clear();
@@ -134,6 +136,7 @@ test('host refresh recovers active room from its room-specific backup and explic
   try {
     f.service.engine.join(f.owner.code, 'BOB', randomUUID());
     f.service.engine.command(f.owner, { action: 'start', sessionId: f.owner.sessionId, revision: f.service.engine.view(f.owner).revision });
+    f.advance(5000);
     f.dom.window.sessionStorage.setItem('bdcahoot_session', JSON.stringify(f.owner));
     f.dom.window.history.replaceState({}, '', `/host/room/${f.owner.code}`);
     await f.remount();
@@ -155,6 +158,7 @@ test('leaving during a question clears recovery and cannot silently rejoin after
     await act(async () => { await f.state.joinRoomAsPlayer('ALDI', f.owner.code); });
     const id = f.state.currentPlayerId!;
     f.service.engine.command(f.owner, { action: 'start', sessionId: f.owner.sessionId, revision: f.service.engine.view(f.owner).revision });
+    f.advance(5000);
     await f.until(() => f.state.room.stage === 'QUESTION');
     await act(async () => { assert((await f.state.submitAnswer(id, 'B')).success); });
     const score = f.service.engine.view(f.owner).players[id].score;
@@ -255,6 +259,7 @@ test('answer delayed past the deadline is rejected and the optimistic pending ch
   try {
     await act(async () => { await f.state.joinRoomAsPlayer('ALDI', f.owner.code); });
     f.service.engine.command(f.owner, { action: 'start', sessionId: f.owner.sessionId, revision: f.service.engine.view(f.owner).revision });
+    f.advance(5000);
     await f.until(() => f.state.room.stage === 'QUESTION');
     let deliver: (() => void) | undefined;
     for (const socket of f.service.io.sockets.sockets.values()) socket.use((packet, next) => {
@@ -280,6 +285,7 @@ test('lost answer ACK is recovered on reconnect without changing the choice or d
   try {
     await act(async () => { await f.state.joinRoomAsPlayer('ALDI', f.owner.code); });
     f.service.engine.command(f.owner, { action: 'start', sessionId: f.owner.sessionId, revision: f.service.engine.view(f.owner).revision });
+    f.advance(5000);
     await f.until(() => f.state.room.stage === 'QUESTION');
     let dropped = false;
     for (const socket of f.service.io.sockets.sockets.values()) socket.use((packet, next) => {
@@ -308,7 +314,7 @@ test('delayed answer ACK from the previous question cannot replace the next pend
   try {
     await act(async () => { await f.state.joinRoomAsPlayer('ALDI', f.owner.code); });
     const command = (action: 'start' | 'next') => f.service.engine.command(f.owner, { action, sessionId: f.owner.sessionId, revision: f.service.engine.view(f.owner).revision });
-    command('start'); await f.until(() => f.state.room.stage === 'QUESTION');
+    command('start'); f.advance(5000); await f.until(() => f.state.room.stage === 'QUESTION');
     let release: (() => void) | undefined;
     for (const socket of f.service.io.sockets.sockets.values()) socket.use((packet, next) => {
       if (packet[0] === 'answer:submit' && !release) {
@@ -333,7 +339,7 @@ test('returning to a visible page refreshes a stale question snapshot', async ()
   try {
     await act(async () => { await f.state.joinRoomAsPlayer('ALDI', f.owner.code); });
     const command = (action: 'start' | 'next') => f.service.engine.command(f.owner, { action, sessionId: f.owner.sessionId, revision: f.service.engine.view(f.owner).revision });
-    command('start'); await f.until(() => f.state.room.stage === 'QUESTION');
+    command('start'); f.advance(5000); await f.until(() => f.state.room.stage === 'QUESTION');
     const socket = [...f.service.io.sockets.sockets.values()].find(s => s.data.credentials?.role === 'player')!;
     const emit = socket.emit;
     // Simulate missed state updates while the page was suspended; resume ACK remains available.
