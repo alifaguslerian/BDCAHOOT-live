@@ -1,4 +1,5 @@
 'use client';
+import { PlayerAvatar } from '@/components/common/PlayerAvatar';
 
 import React, { useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
@@ -78,10 +79,11 @@ export function PlayerLobbyView({ player, roomCode }: PlayerLobbyViewProps) {
           <button
             type="button"
             onClick={() => setShowExitConfirm(true)}
-            className="p-1.5 rounded-lg bg-[#151A22] border border-[#272A31] text-[#8B93A1] hover:text-[#FFB4AB] active:scale-95 transition-all"
+            className="min-h-12 px-3 inline-flex items-center gap-2 rounded-lg bg-[#151A22] border border-[#272A31] text-[#ffb4ab] active:scale-95 transition-all"
             title="Keluar dari Room"
           >
             <LogOut className="w-3.5 h-3.5" />
+            <span>Keluar room</span>
           </button>
         </div>
       </header>
@@ -92,9 +94,7 @@ export function PlayerLobbyView({ player, roomCode }: PlayerLobbyViewProps) {
         <div className="relative mb-6">
           <div className="absolute inset-0 rounded-full bg-[#F5A623]/10 blur-xl animate-pulse" />
           <div className="relative w-28 h-28 rounded-3xl bg-[#151A22] border-2 border-[#F5A623]/40 flex flex-col items-center justify-center shadow-2xl shadow-[#F5A623]/10">
-            <span className="font-anybody font-black text-4xl text-[#FFC880] tracking-wider">
-              {player.name.slice(0, 2)}
-            </span>
+            <PlayerAvatar avatarId={player.avatarId} size={80} />
             <span className="text-[10px] font-space text-[#8B93A1] uppercase tracking-widest mt-1">
               PESERTA
             </span>
