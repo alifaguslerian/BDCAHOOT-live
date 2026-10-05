@@ -8,6 +8,7 @@ import { PlayerQuestionView } from './PlayerQuestionView';
 import { PlayerRevealView } from './PlayerRevealView';
 import { PlayerScoreboardView } from './PlayerScoreboardView';
 import { PlayerFinalView } from './PlayerFinalView';
+import { PlayerRoomControls } from './PlayerRoomControls';
 
 interface PlayerControllerContainerProps {
   roomCode: string;
@@ -49,13 +50,14 @@ export function PlayerControllerContainer({ roomCode }: PlayerControllerContaine
         );
       }
       return (
+        <><PlayerRoomControls />
         <PlayerQuestionView
           key={`${room.sessionId}-q-${room.currentQuestionIndex}`}
           player={player}
           question={currentQuestion}
           questionIndex={room.currentQuestionIndex}
           totalQuestions={room.totalQuestions}
-        />
+        /></>
       );
 
     case 'REVEAL':
@@ -67,16 +69,17 @@ export function PlayerControllerContainer({ roomCode }: PlayerControllerContaine
         );
       }
       return (
+        <><PlayerRoomControls />
         <PlayerRevealView
           key={`${room.sessionId}-reveal-${room.currentQuestionIndex}`}
           player={player}
           question={currentQuestion}
           questionIndex={room.currentQuestionIndex}
-        />
+        /></>
       );
 
     case 'SCOREBOARD':
-      return <PlayerScoreboardView player={player} />;
+      return <><PlayerRoomControls /><PlayerScoreboardView player={player} /></>;
 
     case 'FINAL':
       return <PlayerFinalView player={player} />;
