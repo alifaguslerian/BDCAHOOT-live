@@ -13,6 +13,7 @@ type Identity = { role: 'host' | 'player'; playerId?: string };
 type Room = {
   code: string; sessionId: string; title: string; questions: QuizQuestion[];
   settings: GameRoomSettings; revision: number; stage: GameStage; index: number;
+  countdownEnd?: number | null;
   start: number | null; end: number | null; revealEnd: number | null;
   players: Record<string, Player>; tokens: Map<string, Identity>;
   joins: Map<string, { name: string; credentials: SessionCredentials }>;
@@ -191,7 +192,7 @@ export class GameEngine {
       if(closed) question.correctOption=current.correctOption;
     }
     return {code:room.code,sessionId:room.sessionId,revision:room.revision,quizTitle:room.title,stage:room.stage,currentQuestionIndex:room.index,
-      totalQuestions:room.questions.length,currentQuestion:question,settings:{...room.settings},questionStartedAtMs:room.start,questionEndsAtMs:room.end,revealEndsAtMs:room.revealEnd,
+      totalQuestions:room.questions.length,currentQuestion:question,settings:{...room.settings},countdownEndsAtMs:room.countdownEnd ?? null,questionStartedAtMs:room.start,questionEndsAtMs:room.end,revealEndsAtMs:room.revealEnd,
       players,rankings:room.rankings.map(r=>({...r})),distribution,answeredCount,
       ownReceipt: identity.playerId && room.receipts.has(identity.playerId+':'+room.index) ? {...room.receipts.get(identity.playerId+':'+room.index)!} : null};
   }
@@ -225,10 +226,13 @@ export class GameEngine {
     room.stage='REVEAL'; room.revealEnd=at+room.settings.revealDurationMs; this.changed(room);
   }
   private openQuestion(room: Room): void {
-    room.index++; room.stage='QUESTION'; room.start=this.deferQuestionStart ? null : this.now();
+    room.countdownEnd=null; room.index++; room.stage='QUESTION'; room.start=this.deferQuestionStart ? null : this.now();
     room.end=room.start === null ? null : room.start+room.questions[room.index].timerSeconds*1000; room.revealEnd=null; this.changed(room);
   }
   activateCommittedQuestions(): void {
+    for (const room of this.rooms.values()) if (room.stage === 'COUNTDOWN' && room.countdownEnd == null) {
+      room.countdownEnd = this.now() + 5000; room.revision++;
+    }
     for (const room of this.rooms.values()) if (room.stage === 'QUESTION' && room.start === null) {
       // The committed QUESTION intent already recovers to scoreboard after a crash.
       // Start this runtime clock only after that intent is durable, before publication.
@@ -249,7 +253,7 @@ export class GameEngine {
         for(const [token,identity] of room.tokens) if(identity.playerId===request.playerId) room.tokens.delete(token);
         room.rankings=calculateRankings(room.players); this.changed(room); return;
       }
-      case 'start': if(room.stage==='LOBBY' && Object.keys(room.players).length > 0) {this.openQuestion(room); return;} break;
+      case 'start': if(room.stage==='LOBBY' && Object.keys(room.players).length > 0) {room.stage='COUNTDOWN'; room.countdownEnd=this.deferQuestionStart ? null : this.now()+5000; this.changed(room); return;} break;
       case 'next': if(room.stage==='SCOREBOARD') {
         if(room.index+1<room.questions.length) this.openQuestion(room); else {room.stage='FINAL'; this.changed(room);} return;
       } break;
@@ -265,6 +269,7 @@ export class GameEngine {
     const now=this.now();
     for(const room of this.rooms.values()) {
       if(now-room.touched>TTL) {this.rooms.delete(room.code);this.onChange?.(room.code);continue;}
+      if(room.stage==='COUNTDOWN' && room.countdownEnd != null && now>=room.countdownEnd) this.openQuestion(room);
       if(room.stage==='QUESTION' && room.end !== null && now>room.end+200) this.reveal(room,room.end+200);
       if(room.stage==='REVEAL' && now>=room.revealEnd!) {room.stage='SCOREBOARD';this.changed(room);}
     }
@@ -278,13 +283,18 @@ export class GameEngine {
     for (const [code, room] of rooms) {
       if (!/^[A-Z0-9]{6}$/.test(code) || code !== room.code || typeof room.sessionId !== 'string'
         || !Number.isFinite(room.touched) || !Number.isInteger(room.revision)
-        || !['LOBBY', 'QUESTION', 'REVEAL', 'SCOREBOARD', 'FINAL'].includes(room.stage)
+        || !['LOBBY', 'COUNTDOWN', 'QUESTION', 'REVEAL', 'SCOREBOARD', 'FINAL'].includes(room.stage)
         || !(room.tokens instanceof Map) || !(room.receipts instanceof Map) || !(room.joins instanceof Map)
         || !room.players || Object.keys(room.players).length > 150 || !Array.isArray(room.rankings)) throw Error('Snapshot room tidak valid.');
       parseQuiz({ title: room.title, questions: room.questions });
       if (!Number.isInteger(room.index) || room.index < -1 || room.index >= room.questions.length
-        || (!['LOBBY', 'FINAL'].includes(room.stage) && room.index < 0)) throw Error('Posisi soal snapshot tidak valid.');
+        || (!['LOBBY', 'COUNTDOWN', 'FINAL'].includes(room.stage) && room.index < 0)) throw Error('Posisi soal snapshot tidak valid.');
       if (this.now() - room.touched > TTL) { rooms.delete(code); continue; }
+      if (room.stage === 'COUNTDOWN') {
+        if (room.index !== -1) throw Error('Posisi countdown snapshot tidak valid.');
+        room.countdownEnd = this.deferQuestionStart ? null : this.now() + 5000;
+        this.changed(room);
+      }
       if (room.stage === 'QUESTION') this.reveal(room, this.now());
       if (room.stage === 'REVEAL') { room.stage = 'SCOREBOARD'; this.changed(room); }
     }
