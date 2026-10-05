@@ -1,7 +1,7 @@
 'use client';
 import { PlayerAvatar } from '@/components/common/PlayerAvatar';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useGame } from '@/context/GameContext';
 import { sound } from '@/lib/soundFX';
 import {
@@ -15,7 +15,7 @@ import {
   Crown,
   Medal,
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
 
 interface ScoreboardViewProps {
   roomCode: string;
@@ -34,8 +34,18 @@ export const ScoreboardView: React.FC<ScoreboardViewProps> = ({ roomCode }) => {
   const totalQuestions = room.totalQuestions;
   const isLastQuestion = currentIdx >= totalQuestions - 1;
 
-  // Filter Top 10 participants
+  const reduceMotion = useReducedMotion();
+  const [settledQuestion, setSettledQuestion] = useState<number | null>(null);
+  const settled = reduceMotion || settledQuestion === currentIdx;
+  useEffect(() => {
+    if (reduceMotion) return;
+    const timer = window.setTimeout(() => setSettledQuestion(currentIdx), 650);
+    return () => window.clearTimeout(timer);
+  }, [currentIdx, reduceMotion]);
+
+  // This view remounts each round, so start in the previous relative order.
   const topTen = rankings.slice(0, 10);
+  if (!settled) topTen.sort((a, b) => a.previousRank - b.previousRank || a.rank - b.rank);
 
   const handleNextAction = () => {
     if (isHostActionLoading) return;
@@ -116,16 +126,17 @@ export const ScoreboardView: React.FC<ScoreboardViewProps> = ({ roomCode }) => {
             </div>
           ) : (
             <div className="space-y-2.5">
-              {topTen.map((item, index) => {
-                const isFirst = item.rank === 1;
-                const isSecond = item.rank === 2;
-                const isThird = item.rank === 3;
+              {topTen.map((item) => {
+                const displayedRank = settled ? item.rank : item.previousRank;
+                const isFirst = displayedRank === 1;
+                const isSecond = displayedRank === 2;
+                const isThird = displayedRank === 3;
 
                 // Rank delta badge logic
                 let deltaBadge = null;
                 if (item.rankDelta > 0) {
                   deltaBadge = (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/50 text-emerald-400 text-xs font-space font-bold animate-pulse">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/50 text-emerald-400 text-xs font-space font-bold">
                       <TrendingUp className="w-3 h-3" />
                       <span>↑{item.rankDelta} NAIK</span>
                     </span>
@@ -149,10 +160,11 @@ export const ScoreboardView: React.FC<ScoreboardViewProps> = ({ roomCode }) => {
                 return (
                   <motion.div
                     key={item.playerId}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    className={`flex items-center justify-between p-3.5 sm:p-4 rounded-2xl border transition-all ${
+                    layout={reduceMotion ? false : 'position'}
+                    initial={false}
+                    data-player-id={item.playerId}
+                    transition={{ layout: { duration: 0.5, ease: [0.23, 1, 0.32, 1] } }}
+                    className={`flex items-center justify-between p-3.5 sm:p-4 rounded-2xl border transition-colors ${
                       isFirst
                         ? 'bg-gradient-to-r from-[#F5A623]/15 to-[#FF8C00]/5 border-[#F5A623]/60 shadow-lg'
                         : isSecond
@@ -178,7 +190,7 @@ export const ScoreboardView: React.FC<ScoreboardViewProps> = ({ roomCode }) => {
                         {isFirst ? (
                           <Crown className="w-5 h-5 fill-current" />
                         ) : (
-                          <span>#{item.rank}</span>
+                          <span>#{displayedRank}</span>
                         )}
                       </div>
 
@@ -203,7 +215,7 @@ export const ScoreboardView: React.FC<ScoreboardViewProps> = ({ roomCode }) => {
 
                     {/* Right: Delta Badge + Score */}
                     <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-                      <div className="hidden sm:block">{deltaBadge}</div>
+                      <div className="hidden sm:block">{settled && deltaBadge}</div>
                       <div className="text-right">
                         <div className="font-anybody font-black text-lg sm:text-xl text-white tabular-nums">
                           {item.score.toLocaleString('id-ID')}
