@@ -1,4 +1,5 @@
 'use client';
+import { PlayerAvatar } from '@/components/common/PlayerAvatar';
 
 import React from 'react';
 import { useGame } from '@/context/GameContext';
@@ -181,6 +182,7 @@ export const ScoreboardView: React.FC<ScoreboardViewProps> = ({ roomCode }) => {
                         )}
                       </div>
 
+                      <PlayerAvatar avatarId={item.avatarId} size={40} />
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <span
