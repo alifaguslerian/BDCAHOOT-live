@@ -1,4 +1,5 @@
 'use client';
+import { PlayerAvatar } from '@/components/common/PlayerAvatar';
 
 import React, { useEffect } from 'react';
 import Link from 'next/link';
@@ -71,6 +72,7 @@ export function PlayerFinalView({ player }: PlayerFinalViewProps) {
 
       {/* Main Final Hero */}
       <main className="flex-1 flex flex-col justify-center py-4 space-y-4">
+        <PlayerAvatar avatarId={player.avatarId} size={64} className="mx-auto mb-4" />
         {/* Podium Standing Card */}
         <div className="bg-[#151A22] border-2 border-[#272A31] rounded-3xl p-6 text-center shadow-2xl relative overflow-hidden">
           {/* Champion Background Glow */}
@@ -164,17 +166,9 @@ export function PlayerFinalView({ player }: PlayerFinalViewProps) {
           className="w-full h-12 bg-[#F5A623] hover:bg-[#FFC880] active:scale-98 text-[#452B00] font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer font-space"
         >
           <RotateCcw className="w-4 h-4" />
-          <span>Main Game Baru</span>
+          <span>Keluar room</span>
         </button>
 
-        <Link
-          href="/"
-          onClick={() => sound.playTap()}
-          className="w-full h-11 bg-[#151A22] hover:bg-[#272A31] active:scale-98 text-[#8B93A1] hover:text-[#E1E2EB] font-bold text-xs uppercase tracking-wider rounded-xl transition-all border border-[#272A31] flex items-center justify-center gap-2 font-space"
-        >
-          <Home className="w-4 h-4" />
-          <span>Kembali ke Beranda</span>
-        </Link>
       </footer>
     </div>
   );
