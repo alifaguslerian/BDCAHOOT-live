@@ -1,4 +1,5 @@
 'use client';
+import { DEFAULT_AVATAR_ID } from '@/lib/avatars';
 
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
@@ -13,6 +14,15 @@ const ANSWER_KEY = 'bdcahoot_submission';
 const CREATE_KEY = 'bdcahoot_creation_request';
 const JOIN_KEY = 'bdcahoot_join_request';
 const PLAYER_RECOVERY_KEY = 'bdcahoot_player_recovery';
+const HOST_RECOVERY_PREFIX = 'bdcahoot_host_recovery_';
+function recoveredHost(): SessionCredentials | null {
+  const code = window.location.pathname.match(/^\/host\/room\/([A-Z0-9]{6})\/?$/i)?.[1].toUpperCase();
+  if (!code) return null;
+  try {
+    const value = JSON.parse(localStorage.getItem(HOST_RECOVERY_PREFIX + code) || 'null');
+    return value?.role === 'host' && value.code === code && typeof value.token === 'string' && typeof value.sessionId === 'string' ? value : null;
+  } catch { return null; }
+}
 function recoveredPlayer(): SessionCredentials | null {
   try {
     const value = JSON.parse(localStorage.getItem(PLAYER_RECOVERY_KEY) || 'null');
@@ -46,7 +56,7 @@ function useGameState() {
   const [error, setError] = useState<string | null>(null);
   const [serverOffsetMs, setOffset] = useState(0);
   const [isHostActionLoading, setHostLoading] = useState(false);
-  const joinRequest = useRef<{ code: string; name: string; requestId: string } | null>(null);
+  const joinRequest = useRef<{ code: string; name: string; requestId: string; avatarId?: string } | null>(null);
   const retryResume = useRef<(() => void) | null>(null);
   const leaving = useRef(false);
   const [isLeaving, setLeaving] = useState(false);
@@ -60,11 +70,18 @@ function useGameState() {
   function remember(value: SessionCredentials) {
     leaving.current = false; setLeaving(false);
     credentials.current = value; save(SESSION_KEY, value); setPlayerId(value.playerId || null); setRole(value.role);
+    if (value.role === 'host') { try { localStorage.setItem(HOST_RECOVERY_PREFIX + value.code, JSON.stringify(value)); } catch { /* The operator-key recovery form remains available. */ } }
     if (value.role === 'player') { try { localStorage.setItem(PLAYER_RECOVERY_KEY, JSON.stringify(value)); } catch { /* Tab storage remains available when persistent storage is blocked. */ } }
     if (submissionRef.current?.request.sessionId !== value.sessionId) storeSubmission(null);
   }
   function clearSession() {
     authenticated.current = false;
+    if (credentials.current?.role === 'host') {
+      try {
+        const key = HOST_RECOVERY_PREFIX + credentials.current.code;
+        if (JSON.parse(localStorage.getItem(key) || 'null')?.token === credentials.current.token) localStorage.removeItem(key);
+      } catch { /* Storage may be unavailable. */ }
+    }
     if (credentials.current?.role === 'player' && recoveredPlayer()?.token === credentials.current.token) {
       try { localStorage.removeItem(PLAYER_RECOVERY_KEY); } catch { /* Storage may be blocked. */ }
     }
@@ -82,7 +99,7 @@ function useGameState() {
   useEffect(() => {
     const socket: Socket<ServerEvents, ClientEvents> = io({ autoConnect: false });
     socketRef.current = socket;
-    const saved = readSaved<SessionCredentials>(SESSION_KEY) ?? recoveredPlayer();
+    const saved = readSaved<SessionCredentials>(SESSION_KEY) ?? recoveredHost() ?? recoveredPlayer();
     submissionRef.current = readSaved<Submission>(ANSWER_KEY); setSubmission(submissionRef.current);
     if (saved) remember(saved);
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -164,11 +181,19 @@ function useGameState() {
     if (!result.success) { setError(result.error); return null; }
     save(CREATE_KEY, null); setError(null); await resumeNow(result.data); return result.data.code;
   }
-  async function joinRoomAsPlayer(name: string, code: string) {
+  async function recoverHostRoom(code: string, hostKey: string) {
+    const socket = socketRef.current;
+    if (!socket?.connected) return { success: false as const, error: 'Server belum terhubung. Tunggu koneksi pulih.' };
+    const result = await request<SessionCredentials>(ack => socket.timeout(6000).emit('host:recover', { code, hostKey }, ack));
+    if (!result.success) return result;
+    await resumeNow(result.data);
+    return { success: true as const, code: result.data.code };
+  }
+  async function joinRoomAsPlayer(name: string, code: string, avatarId = DEFAULT_AVATAR_ID) {
     const socket = socketRef.current;
     if (!socket?.connected) return { success: false, error: 'Server belum terhubung.' };
     if (!joinRequest.current) joinRequest.current = readSaved(JOIN_KEY);
-    if (joinRequest.current?.code !== code || joinRequest.current?.name !== name) joinRequest.current = { code, name, requestId: requestId() };
+    if (joinRequest.current?.code !== code || joinRequest.current?.name !== name) joinRequest.current = { code, name, avatarId, requestId: requestId() };
     const attempt = joinRequest.current;
     save(JOIN_KEY, attempt);
     const result = await request<SessionCredentials>(ack => socket.timeout(6000).emit('room:join', attempt, ack));
@@ -213,7 +238,7 @@ function useGameState() {
   }
   const activeSubmission = submission?.request.sessionId === room.sessionId && submission.request.questionIndex === room.currentQuestionIndex ? submission : null;
   return { room, hasRoom: Boolean(room.sessionId), currentPlayerId, role, ready, connection, error, serverOffsetMs, isHostActionLoading,
-    createRoomFromQuiz, inspectRoom, joinRoomAsPlayer, submitAnswer, leaveRoom, isLeaving,
+    createRoomFromQuiz, recoverHostRoom, inspectRoom, joinRoomAsPlayer, submitAnswer, leaveRoom, isLeaving,
     pendingOption: activeSubmission?.request.option ?? null,
     answerConfirmed: Boolean(activeSubmission?.receipt),
     hasPlayerAnswered: (id: string) => Boolean(room.players[id]?.answers[room.currentQuestionIndex] || (id === currentPlayerId && activeSubmission?.receipt)),
