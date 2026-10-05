@@ -82,6 +82,7 @@ export function calculateRankings(
     return {
       playerId: player.id,
       name: player.name,
+      avatarId: player.avatarId,
       score: player.score,
       rank: currentRank,
       previousRank: prevRank,
