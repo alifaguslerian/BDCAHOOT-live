@@ -48,10 +48,12 @@ test('concurrent shutdown calls close the database exactly once', { timeout: 300
 });
 
 test('snapshot restores active question to scoreboard once, preserving receipts, identities and scores', () => {
-  const engine = new GameEngine({ now: () => 10000 });
+  let now = 10000;
+  const engine = new GameEngine({ now: () => now });
   const host = engine.createRoom(quiz), player = engine.join(host.code, 'ANA', randomUUID());
   const absent = engine.join(host.code, 'BOB', randomUUID());
   engine.command(host, { sessionId: host.sessionId, revision: engine.view(host).revision, action: 'start' });
+  now += 5000; engine.tick();
   const packet = { sessionId: host.sessionId, questionIndex: 0, submissionId: randomUUID(), option: 'B' as const };
   const receipt = engine.submit(player, packet);
   const recovered = new GameEngine({ now: () => 20000 });
@@ -90,10 +92,11 @@ test('SQLite persists snapshots, preserves corrupt files and excludes a second s
 
 test('recovery preserves lobby/final, closes reveal once, rejects bad versions, and expires old rooms', () => {
   for (const stage of ['LOBBY', 'REVEAL', 'SCOREBOARD', 'FINAL'] as const) {
-    const engine = new GameEngine({ now: () => 10000 });
+    let now = 10000;
+    const engine = new GameEngine({ now: () => now });
     const host = engine.createRoom(quiz), player = engine.join(host.code, 'ANA', randomUUID());
     const command = (action: 'start' | 'reveal' | 'scoreboard' | 'finish') => engine.command(host, { sessionId: host.sessionId, revision: engine.view(host).revision, action });
-    if (stage !== 'LOBBY') { command('start'); command('reveal'); }
+    if (stage !== 'LOBBY') { command('start'); now += 5000; engine.tick(); command('reveal'); }
     if (stage === 'SCOREBOARD') command('scoreboard');
     if (stage === 'FINAL') command('finish');
     const recovered = new GameEngine({ now: () => 20000 });
@@ -175,6 +178,11 @@ test('100 confirmed simultaneous answers survive abrupt process termination and 
     }));
     const view = await request<RoomView>(first.socket, 'session:resume', host);
     await request(first.socket, 'host:command', { sessionId: host.sessionId, revision: view.revision, action: 'start' });
+    for (let i = 0; i < 100; i++) {
+      const current = await request<RoomView>(first.socket, 'session:resume', host);
+      if (current.stage === 'QUESTION' && current.questionStartedAtMs !== null) break;
+      await delay(100);
+    }
     const accepted = await Promise.all(players.map(async ({ socket, identity }) => {
       const packet = { sessionId: host.sessionId, questionIndex: 0, submissionId: randomUUID(), option: 'B' };
       const receipt = await request(socket, 'answer:submit', packet);
@@ -231,6 +239,11 @@ test('successful socket ACK survives closing and reopening storage, including cr
     const player = await request<SessionCredentials>(first.socket, 'room:join', joinPacket);
     let view = await request<RoomView>(first.socket, 'session:resume', host);
     await request(first.socket, 'host:command', { sessionId: host.sessionId, revision: view.revision, action: 'start' });
+    for (let i = 0; i < 100; i++) {
+      const current = await request<RoomView>(first.socket, 'session:resume', host);
+      if (current.stage === 'QUESTION' && current.questionStartedAtMs !== null) break;
+      await delay(100);
+    }
     await request(first.socket, 'session:resume', player);
     const packet = { sessionId: host.sessionId, questionIndex: 0, submissionId: randomUUID(), option: 'B' };
     const receipt = await request(first.socket, 'answer:submit', packet);
