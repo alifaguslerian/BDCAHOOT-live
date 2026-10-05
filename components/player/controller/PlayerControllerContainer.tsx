@@ -1,5 +1,6 @@
 'use client';
 
+import { CountdownView } from '@/components/common/CountdownView';
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGame } from '@/context/GameContext';
@@ -41,6 +42,8 @@ export function PlayerControllerContainer({ roomCode }: PlayerControllerContaine
     case 'LOBBY':
       return <PlayerLobbyView player={player} roomCode={room.code} />;
 
+    case 'COUNTDOWN':
+      return <><PlayerRoomControls /><CountdownView /></>;
     case 'QUESTION':
       if (!currentQuestion) {
         return (
