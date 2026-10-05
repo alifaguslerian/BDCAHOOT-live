@@ -13,6 +13,7 @@ export interface RoomView {
   totalQuestions: number;
   currentQuestion: PublicQuestion | null;
   settings: GameRoomSettings;
+  countdownEndsAtMs?: number | null;
   questionStartedAtMs: number | null;
   questionEndsAtMs: number | null;
   revealEndsAtMs: number | null;
