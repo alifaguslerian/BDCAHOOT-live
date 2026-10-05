@@ -1,7 +1,8 @@
 import type { OptionId, QuizQuestion } from './quiz';
 
 export type GameStage = 
-  | 'LOBBY' 
+  | 'LOBBY'
+  | 'COUNTDOWN'
   | 'QUESTION' 
   | 'REVEAL' 
   | 'SCOREBOARD' 
