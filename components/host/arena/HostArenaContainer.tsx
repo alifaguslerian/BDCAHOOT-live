@@ -9,6 +9,8 @@ import { RevealView } from './RevealView';
 import { ScoreboardView } from './ScoreboardView';
 import { PodiumView } from './PodiumView';
 import { AlertCircle, ArrowLeft } from 'lucide-react';
+import { HostRecoveryForm } from '@/components/host/HostRecoveryForm';
+import { HostRoomControls } from '@/components/host/HostRoomControls';
 
 interface HostArenaContainerProps {
   roomCode: string;
@@ -16,7 +18,11 @@ interface HostArenaContainerProps {
 
 export const HostArenaContainer: React.FC<HostArenaContainerProps> = ({ roomCode }) => {
   const { room, ready, hasRoom, role } = useGame();
-  if (!ready || !hasRoom || role !== "host") return <div className="min-h-screen bg-[#07090E] text-white p-12 text-center">{!ready ? "Memulihkan sesi…" : "Sesi host tidak tersedia di tab ini."}<br /><Link href="/host/library">Kembali ke Library</Link></div>;
+  if (!ready || !hasRoom || role !== 'host') return <div className="min-h-screen bg-[#07090E] text-white p-6 sm:p-12 text-center space-y-6">
+    <p>{!ready ? 'Memulihkan sesi…' : 'Sesi host tidak tersedia di tab ini.'}</p>
+    {ready && <HostRecoveryForm roomCode={roomCode} />}
+    <Link className="inline-flex min-h-12 items-center underline" href="/host/library">Kembali ke Library</Link>
+  </div>;
   const normalizedInputCode = roomCode.toUpperCase().trim();
   const activeRoomCode = room.code.toUpperCase().trim();
 
@@ -60,11 +66,11 @@ export const HostArenaContainer: React.FC<HostArenaContainerProps> = ({ roomCode
     case 'LOBBY':
       return <LobbyView roomCode={activeRoomCode} />;
     case 'QUESTION':
-      return <QuestionView roomCode={activeRoomCode} />;
+      return <><HostRoomControls /><QuestionView roomCode={activeRoomCode} /></>;
     case 'REVEAL':
-      return <RevealView roomCode={activeRoomCode} />;
+      return <><HostRoomControls /><RevealView roomCode={activeRoomCode} /></>;
     case 'SCOREBOARD':
-      return <ScoreboardView roomCode={activeRoomCode} />;
+      return <><HostRoomControls /><ScoreboardView roomCode={activeRoomCode} /></>;
     case 'FINAL':
       return <PodiumView roomCode={activeRoomCode} />;
     default:
