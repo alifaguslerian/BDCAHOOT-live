@@ -136,6 +136,12 @@ export function createSocketServer(http: HttpServer, options: Options) {
     socket.data.tokens = 200;
     socket.data.pending = 0;
     socket.data.refillAt = performance.now();
+    socket.on('host:recover', (payload, ack) => handle(socket, ack, () => {
+      authorizeOperator(socket, payload?.hostKey);
+      const session = engine.recoverHost(payload?.code);
+      bind(socket, session);
+      return session;
+    }));
     socket.on('library:request', (payload, ack) => handle(socket, ack, () => {
       authorizeOperator(socket, payload?.hostKey);
       if (!options.persistence?.library) throw Error('Penyimpanan kuis server tidak tersedia.');
@@ -168,7 +174,7 @@ export function createSocketServer(http: HttpServer, options: Options) {
       return undefined;
     }));
     socket.on('room:join', (payload, ack) => handle(socket, ack, () => {
-      const session = engine.join(payload?.code, payload?.name, payload?.requestId, socket.data.credentials);
+      const session = engine.join(payload?.code, payload?.name, payload?.requestId, socket.data.credentials, payload?.avatarId);
       bind(socket, session);
       return session;
     }));

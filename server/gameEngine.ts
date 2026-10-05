@@ -2,6 +2,7 @@ import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { calculateQuestionPoints, calculateRankings } from '../lib/scoring';
 import { fitsQuizPayload } from '../lib/quizLimits';
+import { DEFAULT_AVATAR_ID, isAvatarId } from '../lib/avatars';
 import type { GameRoomSettings, GameStage, Player, ScoreboardRankItem } from '../types/game';
 import type { QuizQuestion, OptionId } from '../types/quiz';
 import type { AnswerReceipt, HostCommand, RoomView, SessionCredentials, SubmitRequest } from '../types/network';
@@ -116,7 +117,15 @@ export class GameEngine {
     return {room,identity};
   }
   inspect(code: string): {code: string; stage: GameStage} { const room=this.room(code); return {code:room.code,stage:room.stage}; }
-  join(code: string, name: string, requestId: string, current?: SessionCredentials): SessionCredentials {
+  recoverHost(code: string): SessionCredentials {
+    const room = this.room(code);
+    for (const [token, identity] of room.tokens) {
+      if (identity.role === 'host') return this.resume({ code: room.code, sessionId: room.sessionId, token, role: 'host' });
+    }
+    throw Error('Sesi operator room tidak tersedia.');
+  }
+  join(code: string, name: string, requestId: string, current?: SessionCredentials, avatarId = DEFAULT_AVATAR_ID): SessionCredentials {
+    if (!isAvatarId(avatarId)) throw Error('Avatar tidak valid. Pilih avatar yang tersedia.');
     const room=this.room(code); identifier(requestId);
     const normalized=string(name,15).toUpperCase();
     if(!/^[A-Z]{1,15}$/.test(normalized)) throw new Error('Nama harus 1 sampai 15 huruf A-Z.');
@@ -125,6 +134,8 @@ export class GameEngine {
     if (current) { try { bound = this.resume(current); } catch { /* Revoked/expired sessions may join again. */ } }
     if (bound?.role === 'player' && retry?.credentials.token !== bound.token) throw Error('Keluar dari room sebelum mendaftarkan pemain lain.');
     if(retry) {
+      const previousAvatar = room.players[retry.credentials.playerId!]?.avatarId ?? DEFAULT_AVATAR_ID;
+      if (previousAvatar !== avatarId) throw Error('Permintaan bergabung sudah digunakan untuk avatar lain.');
       if(retry.name!==normalized || !room.tokens.has(retry.credentials.token)) throw new Error('Permintaan bergabung sudah digunakan.');
       room.touched=this.now(); return {...retry.credentials};
     }
@@ -139,7 +150,7 @@ export class GameEngine {
       if (room.joins.size >= 1000) throw new Error('Ruang sudah penuh.');
     }
     const id=randomUUID();
-    room.players[id]={id,name:normalized,joinedAt:this.now(),joinSequence:++room.sequence,connected:true,score:0,totalResponseTimeMs:0,answers:{}};
+    room.players[id]={id,name:normalized,avatarId,joinedAt:this.now(),joinSequence:++room.sequence,connected:true,score:0,totalResponseTimeMs:0,answers:{}};
     const credentials=this.credentials(room,{role:'player',playerId:id});
     room.joins.set(requestId,{name:normalized,credentials});
     room.rankings=calculateRankings(room.players); this.changed(room);
@@ -152,12 +163,11 @@ export class GameEngine {
   leave(credentials: SessionCredentials): void {
     const {room,identity} = this.authenticate(credentials);
     if (identity.role !== 'player' || !identity.playerId) throw new Error('Host harus menutup room melalui kontrol Host.');
-    if (room.stage !== 'LOBBY' && room.stage !== 'FINAL') throw new Error('Permainan sedang berlangsung. Sesi tetap disimpan untuk reconnect.');
     for (const [token, value] of room.tokens) if (value.playerId === identity.playerId) room.tokens.delete(token);
     if (room.stage === 'LOBBY') {
       delete room.players[identity.playerId];
       room.rankings = calculateRankings(room.players);
-    }
+    } else room.players[identity.playerId].connected = false;
     this.changed(room);
   }
   view(credentials: SessionCredentials): RoomView {
