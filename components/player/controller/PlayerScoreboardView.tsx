@@ -1,4 +1,5 @@
 'use client';
+import { PlayerAvatar } from '@/components/common/PlayerAvatar';
 
 import React from 'react';
 import {
@@ -57,6 +58,7 @@ export function PlayerScoreboardView({ player }: PlayerScoreboardViewProps) {
 
       {/* Main Rank Hero */}
       <main className="flex-1 flex flex-col justify-center py-4 space-y-4">
+        <PlayerAvatar avatarId={player.avatarId} size={64} className="mx-auto mb-4" />
         {/* Giant Rank Card */}
         <div className="bg-[#151A22] border-2 border-[#272A31] rounded-3xl p-6 text-center shadow-2xl relative overflow-hidden">
           {/* Subtle background glow */}
