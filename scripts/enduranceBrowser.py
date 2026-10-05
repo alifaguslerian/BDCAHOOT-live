@@ -61,8 +61,8 @@ def main():
                 player.wait_for_load_state('networkidle')
                 player.locator('#room-code-input').fill(config['owner']['code'])
                 player.locator('#btn-submit-code').click()
-                player.locator('input[type="text"]').fill('BROWSER')
-                player.locator('button[type="submit"]').click()
+                player.locator('#player-name-input').fill('BROWSER')
+                player.locator('#btn-join-room').click()
                 player.wait_for_url('**/player/room/*')
                 identity = player.evaluate('JSON.parse(sessionStorage.getItem("bdcahoot_session"))')
                 expect(host.locator('#btn-start-game')).to_be_enabled()
@@ -93,7 +93,8 @@ def main():
                 expect(player.get_by_text('SESI SELESAI', exact=True)).to_be_visible()
                 expect(host.locator('#btn-return-library')).to_be_visible()
                 # Let podium entry animations finish before capturing visual evidence.
-                player.wait_for_timeout(2000)
+                expect(host.locator('[data-podium-rank="1"]')).to_have_attribute("aria-hidden", "false", timeout=15000)
+                player.wait_for_timeout(800)
                 for role, page in pages.items():
                     page.screenshot(path=str(report_path) + '.' + role + '-final.png', full_page=True)
                 probes = {role: page.evaluate('window.__endurance') for role, page in pages.items()}
