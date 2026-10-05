@@ -1,4 +1,5 @@
 'use client';
+import { PlayerAvatar } from '@/components/common/PlayerAvatar';
 
 import React, { useState } from 'react';
 import Link from 'next/link';
@@ -185,9 +186,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({ roomCode }) => {
                     exit={{ opacity: 0, scale: 0.8 }}
                     className="group flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#181F2C] border border-[#2A3446] hover:border-[#F5A623]/50 transition-all text-sm font-space font-semibold shadow-sm"
                   >
-                    <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-[#F5A623] to-[#FF8C00] text-black font-anybody font-black text-xs flex items-center justify-center">
-                      {player.name.charAt(0)}
-                    </div>
+                    <PlayerAvatar avatarId={player.avatarId} size={32} />
                     <span className="text-white tracking-wide">{player.name}</span>
                     <button
                       type="button"
