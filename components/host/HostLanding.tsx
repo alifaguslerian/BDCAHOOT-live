@@ -15,12 +15,12 @@ export const HostLanding = () => {
     <div className="relative min-h-screen flex flex-col justify-between bg-[#0b0e14] text-[#e1e2eb] selection:bg-[#f5a623] selection:text-[#644000]">
       {/* Fixed Header */}
       <header className="fixed top-0 inset-x-0 z-40 bg-[#0b0e14]/90 backdrop-blur-md shadow-[0_1px_8px_rgba(0,0,0,0.35)]">
-        <div className="h-16 w-full px-6 lg:px-12 flex items-center justify-between">
+        <div className="h-16 w-full px-6 lg:px-12 flex items-center justify-between md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
           <div className="flex items-center gap-3">
             <span className="font-anybody font-extrabold text-2xl tracking-tight uppercase text-[#e1e2eb]">
               BDCAHOOT
             </span>
-            <span className="px-2 py-0.5 rounded bg-[#1d2026] text-xs font-bold text-[#ffc880] uppercase tracking-wider">
+            <span className="md:hidden lg:inline px-2 py-0.5 rounded bg-[#1d2026] text-xs font-bold text-[#ffc880] uppercase tracking-wider">
               LIVE ARENA
             </span>
           </div>
@@ -46,7 +46,7 @@ export const HostLanding = () => {
             </Link>
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 justify-self-end">
             <div className="w-8 h-8 rounded-full bg-[#ffc880] flex items-center justify-center text-[#452b00]" aria-hidden="true">
               <User className="w-4 h-4" />
             </div>
