@@ -1,5 +1,6 @@
 'use client';
 
+import { CountdownView } from '@/components/common/CountdownView';
 import React from 'react';
 import Link from 'next/link';
 import { useGame } from '@/context/GameContext';
@@ -65,6 +66,8 @@ export const HostArenaContainer: React.FC<HostArenaContainerProps> = ({ roomCode
   switch (room.stage) {
     case 'LOBBY':
       return <LobbyView roomCode={activeRoomCode} />;
+    case 'COUNTDOWN':
+      return <><HostRoomControls /><CountdownView /></>;
     case 'QUESTION':
       return <><HostRoomControls /><QuestionView roomCode={activeRoomCode} /></>;
     case 'REVEAL':
