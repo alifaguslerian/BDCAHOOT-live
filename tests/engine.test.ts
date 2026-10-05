@@ -36,7 +36,7 @@ function setup(count = 2) {
   const engine = new GameEngine({now: () => time});
   const host = engine.createRoom(quiz(count));
   const join = (name = 'ANA') => engine.join(host.code, name, randomUUID());
-  const command = (action: HostCommand['action'], playerId?: string) => engine.command(host, {action, playerId, sessionId: host.sessionId, revision: engine.view(host).revision});
+  const command = (action: HostCommand['action'], playerId?: string) => { const result = engine.command(host, {action, playerId, sessionId: host.sessionId, revision: engine.view(host).revision}); if (action === 'start') { time += 5000; engine.tick(); } return result; };
   const submit = (player: SessionCredentials, questionIndex = 0) => engine.submit(player, {sessionId: host.sessionId, questionIndex, option: 'A', submissionId: randomUUID()});
   return {engine, host, join, command, submit, advance: (ms: number) => {time += ms; engine.tick();}};
 }
@@ -59,6 +59,7 @@ test('prepared questions reject answers, recover safely, and start their full cl
   const host = engine.createRoom(quiz()), player = engine.join(host.code, 'ANA', randomUUID());
   const command = (action: HostCommand['action']) => engine.command(host, { sessionId: host.sessionId, revision: engine.view(host).revision, action });
   command('start');
+  engine.activateCommittedQuestions(); now += 5000; engine.tick();
   const packet = { sessionId: host.sessionId, questionIndex: 0, submissionId: randomUUID(), option: 'A' as const };
   now += 7000; engine.tick();
   assert.equal(engine.view(host).stage, 'QUESTION');
@@ -210,4 +211,34 @@ test('authenticated activity refreshes bounded room lifetime', () => {
 test('lobby rejects duplicate names and cannot start without players', () => {
   const s=setup();assert.throws(()=>s.command('start'));s.join('ANA');
   assert.throws(()=>s.join('ana'));assert.equal(Object.keys(s.engine.view(s.host).players).length,1);
+});
+
+
+test('countdown hides the question, rejects early answers and preserves the full answering window', () => {
+  let now = 10000;
+  const engine = new GameEngine({ now: () => now });
+  const host = engine.createRoom(quiz()), player = engine.join(host.code, 'ANA', randomUUID());
+  const start = { action: 'start' as const, sessionId: host.sessionId, revision: engine.view(host).revision };
+  engine.command(host, start);
+  const view = engine.view(player);
+  assert.equal(view.stage, 'COUNTDOWN');
+  assert.equal(view.countdownEndsAtMs, 15000);
+  assert.equal(view.currentQuestion, null);
+  assert.equal(view.questionStartedAtMs, null);
+  assert.throws(() => engine.command(host, start));
+  const answer = { sessionId: host.sessionId, questionIndex: 0, submissionId: randomUUID(), option: 'A' as const };
+  assert.throws(() => engine.submit(player, answer));
+  now += 4999; engine.tick();
+  assert.equal(engine.view(host).stage, 'COUNTDOWN');
+  const recovered = new GameEngine({ now: () => now });
+  recovered.restore(engine.snapshot());
+  assert.equal(recovered.view(host).stage, 'COUNTDOWN');
+  assert.equal(recovered.view(host).countdownEndsAtMs, now + 5000);
+  now += 1; engine.tick();
+  assert.equal(engine.view(host).stage, 'QUESTION');
+  assert.equal(engine.view(host).questionStartedAtMs, now);
+  assert.equal(engine.view(host).questionEndsAtMs, now + 5000);
+  engine.submit(player, answer);
+  assert.equal(engine.view(host).players[player.playerId!].score, 0);
+  assert.equal(engine.snapshot().get(host.code)!.players[player.playerId!].score, 2000);
 });
