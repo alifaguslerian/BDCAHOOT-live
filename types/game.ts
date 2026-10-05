@@ -18,6 +18,7 @@ export interface PlayerAnswer {
 }
 
 export interface Player {
+  avatarId?: string;
   id: string;
   name: string; // Sanitized uppercase/trimmed A-Z
   joinedAt: number;
@@ -36,6 +37,7 @@ export interface OptionDistribution {
 }
 
 export interface ScoreboardRankItem {
+  avatarId?: string;
   playerId: string;
   name: string;
   score: number;
