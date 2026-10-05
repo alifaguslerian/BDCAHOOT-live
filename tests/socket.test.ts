@@ -37,6 +37,30 @@ async function request<T>(socket: Socket, event: string, payload: unknown): Prom
   return reply.data;
 }
 const resume = (socket: Socket, credentials: SessionCredentials) => request<RoomView>(socket, 'session:resume', credentials);
+test('operator key recovers an active room without resetting players, points or question clock', async () => {
+  const f = await fixture();
+  try {
+    const host = await f.connect(), player = await f.connect();
+    const owner = await request<SessionCredentials>(host, 'room:create', { quiz, hostKey: 'test-operator-key' });
+    const identity = await request<SessionCredentials>(player, 'room:join', { code: owner.code, name: 'ANA', requestId: randomUUID() });
+    const lobby = await resume(host, owner);
+    await request(host, 'host:command', { action: 'start', sessionId: owner.sessionId, revision: lobby.revision });
+    await request(player, 'answer:submit', { sessionId: owner.sessionId, questionIndex: 0, submissionId: randomUUID(), option: 'B' });
+    const before = f.service.engine.view(owner);
+    host.disconnect();
+    const replacement = await f.connect();
+    await assert.rejects(request(replacement, 'host:recover', { code: owner.code, hostKey: 'wrong' }), /operator/);
+    const recovered = await request<SessionCredentials>(replacement, 'host:recover', { code: owner.code, hostKey: 'test-operator-key' });
+    const after = await resume(replacement, recovered);
+    assert.equal(after.questionEndsAtMs, before.questionEndsAtMs);
+    assert.equal(after.sessionId, before.sessionId);
+    assert.deepEqual(after.players, before.players);
+    assert.deepEqual(await request(replacement, 'host:recover', { code: owner.code, hostKey: 'test-operator-key' }), recovered);
+    await request(replacement, 'host:command', { action: 'reset', sessionId: owner.sessionId, revision: after.revision });
+    await assert.rejects(resume(player, identity));
+    await assert.rejects(request(replacement, 'host:recover', { code: owner.code, hostKey: 'test-operator-key' }));
+  } finally { await f.close(); }
+});
 
 test('resuming a player only refreshes that connection, not the whole room', async () => {
   const f = await fixture();
@@ -152,7 +176,8 @@ test('leaving lobby frees the name, invalidates old credentials, and allows retr
     assert.notEqual(replacement.playerId, identity.playerId);
     const view = await resume(host, owner);
     await request(host, 'host:command', { sessionId: owner.sessionId, revision: view.revision, action: 'start' });
-    await assert.rejects(request(player, 'room:leave', {}), /berlangsung/);
+    await request(player, 'room:leave', {});
+    await assert.rejects(resume(player, replacement));
     assert.equal(Object.keys((await resume(host, owner)).players).length, 1);
     const active = await resume(host, owner);
     await request(host, 'host:command', { sessionId: owner.sessionId, revision: active.revision, action: 'finish' });

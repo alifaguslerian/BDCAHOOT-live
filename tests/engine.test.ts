@@ -6,6 +6,21 @@ import { fitsQuizPayload, MAX_QUIZ_BYTES } from '../lib/quizLimits';
 import type { SessionCredentials, HostCommand } from '../types/network';
 
 const quiz = (count = 2) => ({ id: 'quiz', title: 'Test', createdAt: 0, updatedAt: 0, questions: Array.from({length: count}, (_, i) => ({id: `q${i}`, question: `Question ${i}`, options: ['A','B','C','D'].map(id => ({id, text: id})), correctOption: 'A', timerSeconds: 5})) });
+test('avatar is validated, retained by join retries, rankings and snapshot recovery', () => {
+  const engine = new GameEngine();
+  const host = engine.createRoom(quiz());
+  const id = randomUUID();
+  const player = engine.join(host.code, 'ANA', id, undefined, 'robot-07');
+  assert.equal(engine.view(player).players[player.playerId!].avatarId, 'robot-07');
+  assert.deepEqual(engine.join(host.code, 'ANA', id, undefined, 'robot-07'), player);
+  assert.throws(() => engine.join(host.code, 'ANA', id, undefined, 'robot-08'));
+  assert.throws(() => engine.join(host.code, 'BOB', randomUUID(), undefined, 'https://untrusted.test/avatar.svg'));
+  const recovered = new GameEngine();
+  recovered.restore(engine.snapshot());
+  assert.equal(recovered.view(player).rankings[0].avatarId, 'robot-07');
+  const legacy = recovered.join(host.code, 'BOB', randomUUID());
+  assert.equal(recovered.view(legacy).players[legacy.playerId!].avatarId, 'robot-01');
+});
 test('aggregate quiz limit counts UTF-8 bytes and rejects before allocating a room', () => {
   assert.equal(fitsQuizPayload('a'.repeat(MAX_QUIZ_BYTES)), false);
   assert.equal(fitsQuizPayload('字'.repeat(Math.floor(MAX_QUIZ_BYTES / 2))), false);

@@ -129,6 +129,45 @@ test('player identity and confirmed answer recover after tab storage is lost; ex
   } finally { await f.close(); }
 });
 
+test('host refresh recovers active room from its room-specific backup and explicit reset clears it', async () => {
+  const f = await fixture();
+  try {
+    f.service.engine.join(f.owner.code, 'BOB', randomUUID());
+    f.service.engine.command(f.owner, { action: 'start', sessionId: f.owner.sessionId, revision: f.service.engine.view(f.owner).revision });
+    f.dom.window.sessionStorage.setItem('bdcahoot_session', JSON.stringify(f.owner));
+    f.dom.window.history.replaceState({}, '', `/host/room/${f.owner.code}`);
+    await f.remount();
+    const end = f.state.room.questionEndsAtMs;
+    f.dom.window.sessionStorage.clear();
+    await f.remount();
+    assert.equal(f.state.role, 'host');
+    assert.equal(f.state.room.stage, 'QUESTION');
+    assert.equal(f.state.room.questionEndsAtMs, end);
+    await act(async () => { assert(await f.state.resetRoom()); });
+    f.dom.window.sessionStorage.clear(); await f.remount();
+    assert.equal(f.state.hasRoom, false);
+  } finally { await f.close(); }
+});
+
+test('leaving during a question clears recovery and cannot silently rejoin after refresh', async () => {
+  const f = await fixture();
+  try {
+    await act(async () => { await f.state.joinRoomAsPlayer('ALDI', f.owner.code); });
+    const id = f.state.currentPlayerId!;
+    f.service.engine.command(f.owner, { action: 'start', sessionId: f.owner.sessionId, revision: f.service.engine.view(f.owner).revision });
+    await f.until(() => f.state.room.stage === 'QUESTION');
+    await act(async () => { assert((await f.state.submitAnswer(id, 'B')).success); });
+    const score = f.service.engine.view(f.owner).players[id].score;
+    await act(async () => { assert(await f.state.leaveRoom()); });
+    await f.remount();
+    assert.equal(f.state.hasRoom, false);
+    assert.equal(f.state.currentPlayerId, null);
+    assert.equal(f.dom.window.localStorage.getItem('bdcahoot_player_recovery'), null);
+    assert.equal(f.service.engine.view(f.owner).players[id].score, score);
+    assert.equal(f.service.engine.view(f.owner).players[id].connected, false);
+  } finally { await f.close(); }
+});
+
 test('tab Host credentials take precedence over player recovery without erasing its backup', async () => {
   const f = await fixture();
   try {
