@@ -1,4 +1,5 @@
 'use client';
+import { PlayerAvatar } from '@/components/common/PlayerAvatar';
 
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -128,7 +129,7 @@ export const PodiumView: React.FC<PodiumViewProps> = ({ roomCode }) => {
                   {/* Player Info Card */}
                   <div className="text-center mb-2">
                     <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-[#A0AAB8] text-black font-anybody font-black text-2xl flex items-center justify-center mx-auto shadow-lg mb-1">
-                      🥈
+                      <PlayerAvatar avatarId={second.avatarId} size={56} />
                     </div>
                     <div className="font-space font-black text-base sm:text-lg text-white truncate max-w-[120px] sm:max-w-[160px]">
                       {second.name}
@@ -162,7 +163,7 @@ export const PodiumView: React.FC<PodiumViewProps> = ({ roomCode }) => {
                   <div className="text-center mb-2">
                     <Crown className="w-8 h-8 text-[#F5A623] mx-auto animate-bounce fill-[#F5A623]/20" />
                     <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-tr from-[#F5A623] to-[#FF8C00] text-black font-anybody font-black text-3xl flex items-center justify-center mx-auto shadow-2xl ring-4 ring-[#F5A623]/40 mb-1">
-                      🥇
+                      <PlayerAvatar avatarId={first.avatarId} size={56} />
                     </div>
                     <div className="font-space font-black text-lg sm:text-xl text-[#F5A623] truncate max-w-[140px] sm:max-w-[200px] drop-shadow">
                       {first.name}
@@ -196,7 +197,7 @@ export const PodiumView: React.FC<PodiumViewProps> = ({ roomCode }) => {
                   {/* Player Info Card */}
                   <div className="text-center mb-2">
                     <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-[#CD7F32] text-white font-anybody font-black text-2xl flex items-center justify-center mx-auto shadow-lg mb-1">
-                      🥉
+                      <PlayerAvatar avatarId={third.avatarId} size={56} />
                     </div>
                     <div className="font-space font-black text-base sm:text-lg text-white truncate max-w-[120px] sm:max-w-[160px]">
                       {third.name}
@@ -236,7 +237,7 @@ export const PodiumView: React.FC<PodiumViewProps> = ({ roomCode }) => {
                           #{runner.rank}
                         </span>
                         <span className="font-bold text-white tracking-wide">
-                          {runner.name}
+                          <PlayerAvatar avatarId={runner.avatarId} size={28} /> {runner.name}
                         </span>
                       </div>
                       <span className="font-anybody font-bold text-[#8B93A1] tabular-nums">
