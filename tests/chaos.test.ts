@@ -27,6 +27,8 @@ test('slow question-opening commit does not consume the answering window', async
     slow = true;
     const started = await socket.timeout(3000).emitWithAck('host:command', { sessionId: host.sessionId, revision: service.engine.view(host).revision, action: 'start' });
     assert(started.success);
+    assert.equal(service.engine.view(host).countdownEndsAtMs! - now, 5000);
+    now += 5000; service.engine.tick();
     const resumed = await socket.timeout(3000).emitWithAck('session:resume', host);
     const view = resumed.data as RoomView;
     assert.equal(view.questionEndsAtMs! - now, 5000);
