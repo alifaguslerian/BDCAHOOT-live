@@ -45,6 +45,7 @@ test('operator key recovers an active room without resetting players, points or 
     const identity = await request<SessionCredentials>(player, 'room:join', { code: owner.code, name: 'ANA', requestId: randomUUID() });
     const lobby = await resume(host, owner);
     await request(host, 'host:command', { action: 'start', sessionId: owner.sessionId, revision: lobby.revision });
+    f.advance(5000);
     await request(player, 'answer:submit', { sessionId: owner.sessionId, questionIndex: 0, submissionId: randomUUID(), option: 'B' });
     const before = f.service.engine.view(owner);
     host.disconnect();
@@ -150,6 +151,7 @@ test('two connections sharing a player token cannot score conflicting answers tw
     await resume(second, replacement);
     state = await resume(host, owner);
     await request(host, 'host:command', { sessionId: owner.sessionId, revision: state.revision, action: 'start' });
+    f.advance(5000);
     const packet = { sessionId: owner.sessionId, questionIndex: 0, submissionId: randomUUID(), option: 'B' };
     const replies = await Promise.all([first.timeout(5000).emitWithAck('answer:submit', packet), second.timeout(5000).emitWithAck('answer:submit', { ...packet, option: 'A', submissionId: randomUUID() })]);
     assert.equal(replies.filter(reply => reply.success).length, 1);
@@ -176,6 +178,7 @@ test('leaving lobby frees the name, invalidates old credentials, and allows retr
     assert.notEqual(replacement.playerId, identity.playerId);
     const view = await resume(host, owner);
     await request(host, 'host:command', { sessionId: owner.sessionId, revision: view.revision, action: 'start' });
+    f.advance(5000);
     await request(player, 'room:leave', {});
     await assert.rejects(resume(player, replacement));
     assert.equal(Object.keys((await resume(host, owner)).players).length, 1);
@@ -231,6 +234,7 @@ test('wire isolates credentials, rooms, expired packets and malformed requests',
     assert.equal(privilege.success, false);
     let view = await resume(host, owner);
     await request(host, 'host:command', { sessionId: owner.sessionId, revision: view.revision, action: 'start' });
+    f.advance(5000);
     const valid = { sessionId: owner.sessionId, questionIndex: 0, submissionId: 'private-submission-id-123', option: 'B' };
     for (const packet of [null, {}, {...valid, sessionId:'other'}, {...valid, questionIndex:1}, {...valid, option:'AB'}, {...valid, questionIndex:NaN}]) {
       const reply = await player.timeout(5000).emitWithAck('answer:submit', packet);
@@ -270,6 +274,7 @@ test('100 real sockets complete 40 questions; reconnect/retry cannot duplicate s
       state = await resume(host, owner);
     };
     await command('start');
+    f.advance(5000);
     const start = performance.now();
     const latencies: number[] = [];
     for (let q = 0; q < 40; q++) {
