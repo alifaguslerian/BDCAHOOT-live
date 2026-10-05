@@ -24,7 +24,7 @@ Pengembangan: `npm run dev`. `PORT` mengubah port; `HOST_KEY` menetapkan kode op
 ## Batas operasional
 
 - Server menyimpan pertandingan ke SQLite lokal (`data/game.sqlite`, dapat diubah lewat `DATABASE_PATH`). Satu proses server per database. Jangan menutup terminal atau membiarkan laptop tidur saat pertandingan; restart akan mengakhiri soal yang sedang aktif dan memulihkannya ke scoreboard.
-- Sesi aktif dipisahkan per tab melalui sessionStorage. Token pemain terakhir juga dicadangkan di localStorage agar tab baru pada profil/origin yang sama dapat memulihkan pemain dan receipt server. Host tetap memakai tab asal. Menghapus site data atau berganti browser/origin dapat menghilangkan identitas.
+- Sesi aktif dipisahkan per tab melalui sessionStorage. Token pemain terakhir juga dicadangkan di localStorage agar tab baru pada profil/origin yang sama dapat memulihkan pemain dan receipt server. Sesi Host dicadangkan per kode room di localStorage; URL room yang sama dapat memulihkannya jika sessionStorage hilang. Menghapus site data atau berganti browser/origin dapat menghilangkan identitas.
 - Batas: 150 pemain/room, 200 soal/kuis, payload kuis maksimal 200 KiB, 16 room aktif. Room kedaluwarsa setelah enam jam tanpa aktivitas terautentikasi.
 - Firewall perlu mengizinkan port server di jaringan privat. Wi-Fi guest dengan client isolation dapat menghalangi akses ke laptop.
 - HTTP lokal ditujukan untuk LAN tepercaya. Tidak melindungi token dari penyadap jaringan; gunakan TLS untuk jaringan tidak tepercaya. Jangan expose langsung ke Internet.
@@ -181,3 +181,26 @@ Database baru mulai dengan library kosong; materi kuis contoh dan kuncinya tidak
 disisipkan ke bundle publik. Kuis localStorage Host dimigrasikan dengan cadangan seperti dijelaskan di atas.
 Jangan gunakan kuis contoh dari versi lama sebagai materi kompetisi rahasia, karena
 materi itu pernah tersedia publik. Buat soal sendiri sebelum acara.
+
+
+### Avatar pemain
+
+Pada langkah isi nama, pemain dapat memilih satu dari 12 ilustrasi robot Bottts (default Robot 1). Avatar muncul di lobby, hasil pemain, leaderboard host dan podium. Pilihan disimpan bersama pemain dalam snapshot pertandingan sehingga reconnect dan recovery mempertahankannya. Pemain dari snapshot lama memakai tampilan Robot 1.
+
+Aset SVG lokal berada di `public/avatars/` (sekitar 62 KiB total), tanpa permintaan internet saat bermain. Sumber/lisensi tercatat di `public/avatars/README.txt`. Server menerima ID avatar dari daftar tetap; URL atau upload gambar tidak diterima. Retry join memakai pilihan dari permintaan awal yang belum terkonfirmasi agar identitas tetap konsisten. Avatar tidak memengaruhi poin atau tie-breaker.
+
+
+### Pemulihan operator saat room masih aktif
+
+Refresh pada URL `/host/room/KODE` memulihkan sesi dari sessionStorage, atau cadangan Host khusus kode room pada browser/origin yang sama. Jika keduanya hilang atau operator pindah browser/alamat, buka URL room tersebut dan pilih **Pulihkan kendali room** memakai kode operator dari terminal server. Form yang sama tersedia di Library melalui **Pulihkan room yang masih aktif**. Library juga menyediakan tautan ke room Host yang masih tersambung.
+
+Pemulihan memerlukan kode operator yang valid; kode room saja tidak memberikan kendali. Pemulihan tidak membuat room baru, mereset timer, atau mengubah pemain/poin. Room yang ditutup atau kedaluwarsa tidak dapat dipulihkan. Tombol **Tutup room** tersedia juga selama soal/reveal/scoreboard, meminta konfirmasi, lalu mengakhiri sesi semua pemain. Penutupan menghapus cadangan sesi Host tersebut. Restart proses server tetap mengikuti aturan pemulihan pertandingan: soal aktif diakhiri ke scoreboard; berbeda dari refresh browser.
+
+Verifikasi 2026-10-04: 55 tes regresi, build dan lint lolos. Chrome produksi menguji refresh saat soal aktif, sessionStorage hilang, seluruh storage hilang, penolakan kode operator salah, pemulihan room, serta penutupan yang melepaskan pemain. Penyebab kehilangan sesi pada browser pengguna belum terkonfirmasi; refresh normal berhasil dalam pengujian.
+
+
+### Keluar room dari perangkat pemain
+
+Tombol **Keluar room** tersedia pada lobby, soal, pembahasan, leaderboard dan hasil akhir. Pada game aktif, pemain mengonfirmasi keluar; token aksesnya dicabut dan cadangan sesi perangkat dihapus setelah server mengonfirmasi. Refresh setelah keluar tidak memasukkan pemain kembali. Nilai/jawaban yang sudah tercatat tetap menjadi bagian hasil pertandingan, tetapi pemain ditandai tidak terhubung. Pemain tidak dapat bergabung ulang ke game yang telah dimulai. Keluar membutuhkan koneksi ke server agar pencabutan sesi terkonfirmasi.
+
+Refresh browser Host di URL room yang sama memulihkan room secara otomatis dan tidak mengulang pertanyaan atau timer. Pengujian Chrome mencakup refresh di lobby, soal aktif dan scoreboard serta tombol keluar pada setiap fase aktif sampai final. Verifikasi pembaruan: 56 tes regresi, build dan lint lolos.
