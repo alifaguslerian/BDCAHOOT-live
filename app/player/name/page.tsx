@@ -7,6 +7,8 @@ import { User, ArrowRight, ArrowLeft, AlertCircle, CheckCircle2 } from 'lucide-r
 import { useGame } from '@/context/GameContext';
 import { sound } from '@/lib/soundFX';
 import { validatePlayerName } from '@/lib/validation';
+import { AVATARS, DEFAULT_AVATAR_ID } from '@/lib/avatars';
+import { PlayerAvatar } from '@/components/common/PlayerAvatar';
 import { ResumePlayerSession } from '@/components/player/ResumePlayerSession';
 
 function PlayerNameContent() {
@@ -16,6 +18,8 @@ function PlayerNameContent() {
 
   const { room, joinRoomAsPlayer } = useGame();
   const [name, setName] = useState('');
+  const [avatarId, setAvatarId] = useState(DEFAULT_AVATAR_ID);
+  const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Live duplicate check against existing room players
@@ -37,10 +41,13 @@ function PlayerNameContent() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
     setSubmitError(null);
 
     const cleanName = name.trim().toUpperCase();
-    const res = await joinRoomAsPlayer(cleanName, roomCode);
+    const res = await joinRoomAsPlayer(cleanName, roomCode, avatarId);
+    setSubmitting(false);
 
     if (!res.success) {
       sound.playError();
@@ -136,13 +143,25 @@ function PlayerNameContent() {
           )}
         </div>
 
+        <fieldset disabled={submitting}>
+          <legend className="text-xs font-bold text-[#d7c3ae] mb-3">PILIH AVATAR</legend>
+          <div className="grid grid-cols-4 gap-2">
+            {AVATARS.map(avatar => <label key={avatar.id} className="relative cursor-pointer">
+              <input type="radio" name="avatar" value={avatar.id} checked={avatarId === avatar.id}
+                onChange={() => setAvatarId(avatar.id)} aria-label={avatar.label} className="peer sr-only" />
+              <span className="flex min-h-14 items-center justify-center rounded-xl border-2 border-transparent p-1 peer-checked:border-[#ffc880] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-white">
+                <PlayerAvatar avatarId={avatar.id} size={48} />
+              </span>
+            </label>)}
+          </div>
+        </fieldset>
         <button
           id="btn-join-room"
           type="submit"
-          disabled={!validationState.isValid}
+          disabled={!validationState.isValid || submitting}
           className="w-full h-12 bg-[#f5a623] hover:bg-[#ffc880] disabled:bg-[#272a31] disabled:text-[#8b93a1] text-[#452b00] font-bold text-sm uppercase tracking-wider rounded-lg transition-colors shadow flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
         >
-          <span>Masuk Arena</span>
+          <span>{submitting ? 'Masuk…' : 'Masuk Arena'}</span>
           <ArrowRight className="w-4 h-4" />
         </button>
 
