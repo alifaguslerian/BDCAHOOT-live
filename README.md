@@ -17,7 +17,7 @@ npm start
 
 Terminal menampilkan URL lokal, alamat LAN, dan kode operator. Host membuka URL lokal, memasukkan kode operator untuk membuka koleksi kuis, memilih kuis lalu membuat room. Pemain membuka alamat LAN yang tercetak (contoh http://192.168.1.10:3000/player/join) dari Wi-Fi yang sama. Bagikan kode room, bukan kode operator.
 
-Setelah pemain masuk, Host menekan Mulai Game. Server menutup jawaban setelah deadline + toleransi 200 ms. Pembahasan 3-5 detik dilanjutkan scoreboard. Host melanjutkan soal berikutnya atau menampilkan podium setelah soal terakhir.
+Setelah pemain masuk, Host menekan Mulai Game. Host dan pemain melihat countdown server 5–4–3–2–1 sebelum soal pertama dikirim; timer menjawab baru dimulai setelah countdown. Refresh browser mengikuti sisa countdown, sedangkan restart server saat countdown mengulang persiapan 5 detik. Server menutup jawaban setelah deadline + toleransi 200 ms. Pembahasan 3-5 detik dilanjutkan scoreboard. Host melanjutkan soal berikutnya atau menampilkan podium setelah soal terakhir.
 
 Pengembangan: `npm run dev`. `PORT` mengubah port; `HOST_KEY` menetapkan kode operator minimal 12 karakter. Tanpa HOST_KEY, server membuat kode acak saat startup. Gunakan `.env.local` untuk konfigurasi (lihat `.env.example`). Gunakan build produksi saat acara.
 
@@ -204,3 +204,5 @@ Verifikasi 2026-10-04: 55 tes regresi, build dan lint lolos. Chrome produksi men
 Tombol **Keluar room** tersedia pada lobby, soal, pembahasan, leaderboard dan hasil akhir. Pada game aktif, pemain mengonfirmasi keluar; token aksesnya dicabut dan cadangan sesi perangkat dihapus setelah server mengonfirmasi. Refresh setelah keluar tidak memasukkan pemain kembali. Nilai/jawaban yang sudah tercatat tetap menjadi bagian hasil pertandingan, tetapi pemain ditandai tidak terhubung. Pemain tidak dapat bergabung ulang ke game yang telah dimulai. Keluar membutuhkan koneksi ke server agar pencabutan sesi terkonfirmasi.
 
 Refresh browser Host di URL room yang sama memulihkan room secara otomatis dan tidak mengulang pertanyaan atau timer. Pengujian Chrome mencakup refresh di lobby, soal aktif dan scoreboard serta tombol keluar pada setiap fase aktif sampai final. Verifikasi pembaruan: 56 tes regresi, build dan lint lolos.
+
+Podium host muncul dari bawah dengan urutan juara 3, 2, 1 dan jeda 5 detik antarjuara. Balok juara 1 paling tinggi dengan dasar sejajar. Jika peserta kurang dari tiga, urutan dimulai dari peringkat terakhir yang tersedia. Pengaturan reduced motion menampilkan seluruh podium langsung. Animasi tidak mengunci tombol operator atau mengubah poin.
