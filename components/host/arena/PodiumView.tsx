@@ -1,7 +1,7 @@
 'use client';
 import { PlayerAvatar } from '@/components/common/PlayerAvatar';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGame } from '@/context/GameContext';
 import { sound } from '@/lib/soundFX';
@@ -14,7 +14,7 @@ import {
   Award,
   Sparkles,
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
 
 interface PodiumViewProps {
   roomCode: string;
@@ -30,9 +30,34 @@ export const PodiumView: React.FC<PodiumViewProps> = ({ roomCode }) => {
   const third = rankings[2] ?? null;
   const runnersUp = rankings.slice(3, 10);
 
+  const reduceMotion = useReducedMotion();
+  const podiumSize = Math.min(totalPlayers, 3);
+  const [revealedCount, setRevealedCount] = useState(0);
+  const visibleCount = reduceMotion ? podiumSize : revealedCount;
+  const isRevealed = (rank: number) => rank > podiumSize - visibleCount;
+
   useEffect(() => {
-    sound.playFanfare();
-  }, []);
+    if (podiumSize === 0) return;
+    const timers = Array.from({ length: podiumSize }, (_, index) =>
+      window.setTimeout(() => setRevealedCount(index + 1), index * 5000 + 100),
+    );
+    const fanfare = window.setTimeout(() => sound.playFanfare(), reduceMotion ? 0 : (podiumSize - 1) * 5000 + 100);
+    return () => {
+      timers.forEach(window.clearTimeout);
+      window.clearTimeout(fanfare);
+    };
+  }, [podiumSize, reduceMotion]);
+
+  const revealMotion = (rank: number) => ({
+    initial: false as const,
+    animate: {
+      opacity: isRevealed(rank) ? 1 : 0,
+      transform: isRevealed(rank) || reduceMotion ? 'translateY(0px)' : 'translateY(100%)',
+    },
+    transition: { duration: reduceMotion ? 0 : 0.65, ease: [0.23, 1, 0.32, 1] as const },
+    'aria-hidden': !isRevealed(rank),
+    'data-podium-rank': rank,
+  });
 
   const handleReturnToLibrary = async () => {
     sound.playTap();
@@ -117,14 +142,12 @@ export const PodiumView: React.FC<PodiumViewProps> = ({ roomCode }) => {
             </div>
 
             {/* Podium Graphic Layout with Graceful Degradation */}
-            <div className="w-full max-w-3xl flex items-end justify-center gap-2 sm:gap-4 h-72 sm:h-80 px-2 my-2">
+            <div className="w-full max-w-3xl flex items-end justify-center gap-2 sm:gap-4 min-h-[420px] sm:min-h-[480px] overflow-hidden px-2 my-2">
               {/* 2nd Place: Left Pedestal (Shown if >= 2 players) */}
               {second && (
                 <motion.div
-                  initial={{ opacity: 0, y: 50 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3, duration: 0.5 }}
-                  className="flex-1 flex flex-col items-center justify-end h-full max-w-[200px]"
+                  {...revealMotion(2)}
+                  className="flex-1 flex flex-col items-center justify-end min-w-0 max-w-[200px]"
                 >
                   {/* Player Info Card */}
                   <div className="text-center mb-2">
@@ -140,7 +163,7 @@ export const PodiumView: React.FC<PodiumViewProps> = ({ roomCode }) => {
                   </div>
 
                   {/* Pedestal Box */}
-                  <div className="w-full h-40 sm:h-48 rounded-t-3xl bg-gradient-to-t from-[#131926] to-[#1E2530] border-t-4 border-l-2 border-r-2 border-[#A0AAB8] flex flex-col items-center justify-center shadow-xl">
+                  <div className="w-full shrink-0 h-40 sm:h-48 rounded-t-3xl bg-gradient-to-t from-[#131926] to-[#1E2530] border-t-4 border-l-2 border-r-2 border-[#A0AAB8] flex flex-col items-center justify-center shadow-xl">
                     <span className="font-anybody font-black text-4xl sm:text-5xl text-[#A0AAB8]/50">
                       2
                     </span>
@@ -154,14 +177,12 @@ export const PodiumView: React.FC<PodiumViewProps> = ({ roomCode }) => {
               {/* 1st Place: Center Pedestal (Always shown if >= 1 player, Tallest) */}
               {first && (
                 <motion.div
-                  initial={{ opacity: 0, y: 60 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5, duration: 0.6 }}
-                  className="flex-1 flex flex-col items-center justify-end h-full max-w-[240px] z-10"
+                  {...revealMotion(1)}
+                  className="flex-1 flex flex-col items-center justify-end min-w-0 max-w-[240px] z-10"
                 >
                   {/* Crown + Winner Card */}
                   <div className="text-center mb-2">
-                    <Crown className="w-8 h-8 text-[#F5A623] mx-auto animate-bounce fill-[#F5A623]/20" />
+                    <Crown className="w-8 h-8 text-[#F5A623] mx-auto fill-[#F5A623]/20" />
                     <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-tr from-[#F5A623] to-[#FF8C00] text-black font-anybody font-black text-3xl flex items-center justify-center mx-auto shadow-2xl ring-4 ring-[#F5A623]/40 mb-1">
                       <PlayerAvatar avatarId={first.avatarId} size={56} />
                     </div>
@@ -174,7 +195,7 @@ export const PodiumView: React.FC<PodiumViewProps> = ({ roomCode }) => {
                   </div>
 
                   {/* Pedestal Box (Tallest) */}
-                  <div className="w-full h-52 sm:h-64 rounded-t-3xl bg-gradient-to-t from-[#181F2C] to-[#252E3E] border-t-4 border-l-2 border-r-2 border-[#F5A623] flex flex-col items-center justify-center shadow-2xl relative overflow-hidden">
+                  <div className="w-full shrink-0 h-60 sm:h-72 rounded-t-3xl bg-gradient-to-t from-[#181F2C] to-[#252E3E] border-t-4 border-l-2 border-r-2 border-[#F5A623] flex flex-col items-center justify-center shadow-2xl relative overflow-hidden">
                     <div className="absolute inset-0 bg-[#F5A623]/5 pointer-events-none" />
                     <span className="font-anybody font-black text-5xl sm:text-6xl text-[#F5A623]">
                       1
@@ -189,10 +210,8 @@ export const PodiumView: React.FC<PodiumViewProps> = ({ roomCode }) => {
               {/* 3rd Place: Right Pedestal (Shown if >= 3 players) */}
               {third && (
                 <motion.div
-                  initial={{ opacity: 0, y: 40 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1, duration: 0.5 }}
-                  className="flex-1 flex flex-col items-center justify-end h-full max-w-[200px]"
+                  {...revealMotion(3)}
+                  className="flex-1 flex flex-col items-center justify-end min-w-0 max-w-[200px]"
                 >
                   {/* Player Info Card */}
                   <div className="text-center mb-2">
@@ -208,7 +227,7 @@ export const PodiumView: React.FC<PodiumViewProps> = ({ roomCode }) => {
                   </div>
 
                   {/* Pedestal Box */}
-                  <div className="w-full h-32 sm:h-36 rounded-t-3xl bg-gradient-to-t from-[#131926] to-[#1E2530] border-t-4 border-l-2 border-r-2 border-[#CD7F32] flex flex-col items-center justify-center shadow-xl">
+                  <div className="w-full shrink-0 h-28 sm:h-32 rounded-t-3xl bg-gradient-to-t from-[#131926] to-[#1E2530] border-t-4 border-l-2 border-r-2 border-[#CD7F32] flex flex-col items-center justify-center shadow-xl">
                     <span className="font-anybody font-black text-4xl sm:text-5xl text-[#CD7F32]/50">
                       3
                     </span>
