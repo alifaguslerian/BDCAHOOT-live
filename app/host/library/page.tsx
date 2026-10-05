@@ -19,9 +19,12 @@ import { Quiz } from '@/types/quiz';
 import { getStoredQuizzes, deleteQuiz, createNewDraftQuiz, saveQuiz, refreshQuizzes as loadLibrary } from '@/lib/quizStore';
 import { validateQuiz } from '@/lib/validation';
 import { sound } from '@/lib/soundFX';
+import { useGame } from '@/context/GameContext';
+import { HostRecoveryForm } from '@/components/host/HostRecoveryForm';
 
 export default function HostLibraryPage() {
   const router = useRouter();
+  const { room, hasRoom, role } = useGame();
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -106,6 +109,11 @@ export default function HostLibraryPage() {
 
       {/* Main Container */}
       <main className="flex-1 w-full max-w-6xl mx-auto px-6 lg:px-12 py-8 flex flex-col">
+        {hasRoom && role === 'host' && <Link href={`/host/room/${room.code}`} className="mb-4 rounded border border-[#ffc880] p-4 text-[#ffc880]">Lanjutkan room aktif: {room.code}</Link>}
+        <details className="mb-6 rounded border border-[#272a31] p-4">
+          <summary className="cursor-pointer min-h-12 flex items-center">Pulihkan room yang masih aktif</summary>
+          <HostRecoveryForm />
+        </details>
         {error && <p role="alert" className="mb-4 text-[#ffb4ab]">{error}</p>}
         {/* Page Title & Search Filter */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
