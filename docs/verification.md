@@ -1,5 +1,9 @@
 # Verification — 29 September 2026
 
+Pembaruan 7 Oktober 2026: lihat [tindak lanjut audit](audit-follow-up-2026-10-07.md)
+untuk perbaikan ACK/kontras/layout, 58 tes regresi, tes recovery, hasil 80 peserta
+campuran × 40 soal, serta percobaan gagal dan keterbatasan yang tetap dicatat.
+
 - npm test: 16/16 tests passed against the production engine and Socket.io transport.
 - Transport run: 100 sockets, 40 questions, 4,000 submissions. Latest run ACK p95 33.79 ms and p99 38.09 ms on loopback. Question clock is accelerated; this is not a 100-phone rendering or Wi-Fi benchmark.
 - npm run typecheck and npm run lint: passed.
