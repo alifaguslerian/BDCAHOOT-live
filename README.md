@@ -156,6 +156,29 @@ Tambahkan `--database` untuk memasukkan biaya persistence seperti server normal.
 Tanpa opsi ini, harness memakai memori saja. Gunakan database pengujian terpisah;
 jangan arahkan benchmark ke database pertandingan acara.
 
+Untuk beberapa pemain browser penuh, gunakan `--browser-players`:
+
+```sh
+npm run test:endurance -- --players=80 --browser-players=10 --questions=40 --seconds=5 --database=reports/browser-fleet.sqlite --report=reports/browser-fleet.json
+python scripts/check-player-layout.py reports/player-layout.json
+python scripts/check-network-recovery.py
+```
+
+Contoh fleet menjalankan 10 pemain browser dengan storage terpisah, 70 bot Socket.IO,
+dan UI Host. Jumlah browser dapat dinaikkan sampai jumlah pemain, tetapi kebutuhan RAM
+pembangkit beban juga meningkat; mulai kecil pada laptop yang sama dengan server.
+Mode fleet tidak memakai CPU throttling 4× atau forced GC. Halaman dimuat bersamaan,
+join melalui UI dilakukan per batch 10, dan timer pertandingan berjalan nyata.
+Laporan browser mencatat ACK yang diamati melalui CDP, klik-ke-konfirmasi UI, selisih
+penerimaan soal, error, disconnect, dan sampel heap/DOM pada dua browser. Angka CDP
+mencakup penjadwalan alat penguji, bukan waktu jaringan murni. Laporan server mencatat
+CPU, RAM, RAM sistem yang tersedia, waktu snapshot/penyimpanan/penantian ACK, dan
+alasan penutupan socket. Pengukuran server memakai counter berukuran tetap dan tidak
+mengirim diagnostik ke pemain.
+
+Tes layout memakai port 3137; tes recovery memakai port 3133. Keduanya membuat
+database sementara sendiri. Tidak satu pun tes ini mewakili kapasitas Wi-Fi 80 HP.
+
 ## Struktur
 
 - server/gameEngine.ts: validasi, state machine, deadline monoton, scoring, proyeksi data.
