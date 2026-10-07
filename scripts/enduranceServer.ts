@@ -1,12 +1,15 @@
 import { createServer } from 'node:http';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
+import { freemem } from 'node:os';
 import { createSocketServer } from '../server/socketServer';
 import { SnapshotStore } from '../server/persistence';
 
 export interface Sample {
   elapsedMs: number; intervalMs: number; phase: string; cpuPercentOneCore: number;
   rssBytes: number; heapUsedBytes: number; externalBytes: number;
+  freeSystemMemoryBytes: number;
   eventLoopP99Ms: number; eventLoopMaxMs: number; sockets: number; rooms: number;
+  timings: ReturnType<ReturnType<typeof createSocketServer>['diagnostics']>;
 }
 
 async function main() {
@@ -26,6 +29,11 @@ async function main() {
   histogram.enable();
   const started = performance.now();
   let previousTime = started, previousCpu = process.cpuUsage(), phase = 'baseline';
+  service.io.on('connection', socket => {
+    socket.on('disconnect', reason => {
+      if (process.connected) process.send?.({ type: 'socket-close', elapsedMs: performance.now() - started, phase, reason });
+    });
+  });
   const sample = () => {
     const now = performance.now(), cpu = process.cpuUsage(), memory = process.memoryUsage();
     const intervalMs = now - previousTime;
@@ -33,8 +41,10 @@ async function main() {
       elapsedMs: now - started, intervalMs, phase,
       cpuPercentOneCore: ((cpu.user - previousCpu.user + cpu.system - previousCpu.system) / 1000) / intervalMs * 100,
       rssBytes: memory.rss, heapUsedBytes: memory.heapUsed, externalBytes: memory.external,
+      freeSystemMemoryBytes: freemem(),
       eventLoopP99Ms: histogram.percentile(99) / 1e6, eventLoopMaxMs: histogram.max / 1e6,
       sockets: service.io.engine.clientsCount, rooms: service.engine.roomCodes().length,
+      timings: service.diagnostics(),
     };
     if (process.connected) process.send?.({ type: 'sample', row });
     previousTime = now; previousCpu = cpu; histogram.reset();
