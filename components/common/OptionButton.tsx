@@ -20,11 +20,6 @@ export interface OptionButtonProps {
   size?: 'md' | 'lg' | 'projector';
 }
 
-/**
- * OptionButton (Atom)
- * Accessible geometric + high-contrast card for quiz options (▲, ◆, ●, ■).
- * Meets WCAG AA > 4.5:1 contrast requirements and provides rich stage states.
- */
 export const OptionButton: React.FC<OptionButtonProps> = ({
   id,
   optionId,
@@ -43,23 +38,23 @@ export const OptionButton: React.FC<OptionButtonProps> = ({
   const config = OPTION_CONFIGS[optionId];
 
   // Visual state computation using canonical constants
-  let stateClasses = `${config.tailwindBg} text-white border-transparent`;
+  let stateClasses = `${config.tailwindBg} text-[#111827] border-transparent`;
   let opacityClass = 'opacity-100';
 
   if (isRevealed) {
     if (isCorrect) {
-      stateClasses = `${config.tailwindBg} text-white ring-4 ring-white shadow-2xl scale-[1.01] brightness-110`;
+      stateClasses = `${config.tailwindBg} text-[#111827] ring-4 ring-white shadow-2xl scale-[1.01] brightness-110`;
     } else {
-      opacityClass = 'opacity-25 grayscale-[40%]';
+      opacityClass = 'saturate-50';
     }
   } else if (isSelected) {
-    stateClasses = `${config.tailwindBg} text-white ring-4 ring-[#ffc880] shadow-xl`;
+    stateClasses = `${config.tailwindBg} text-[#111827] ring-4 ring-[#ffc880] shadow-xl`;
   }
 
   const sizeClasses = {
     md: 'min-h-[68px] p-3 text-base rounded-xl',
     lg: 'min-h-[88px] p-4 sm:p-5 text-lg sm:text-xl rounded-2xl',
-    projector: 'min-h-[110px] xl:min-h-[130px] p-5 sm:p-6 text-xl sm:text-2xl rounded-2xl',
+    projector: 'min-h-[96px] p-4 sm:p-5 text-xl sm:text-2xl rounded-2xl',
   }[size];
 
   return (
@@ -74,7 +69,7 @@ export const OptionButton: React.FC<OptionButtonProps> = ({
       {/* Background Vote Percentage Bar (during Reveal Stage) */}
       {showVoteStats && (
         <div
-          className="absolute inset-0 bg-black/25 transition-all duration-700 pointer-events-none"
+          className="absolute inset-0 bg-white/20 transition-all duration-700 pointer-events-none"
           style={{ width: `${Math.min(100, Math.max(0, votePercentage))}%` }}
         />
       )}
@@ -83,7 +78,7 @@ export const OptionButton: React.FC<OptionButtonProps> = ({
         {/* Left: Shape Icon + Option Letter + Text */}
         <div className="flex items-center gap-3.5 sm:gap-4 flex-1 min-w-0">
           <div
-            className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-black/25 flex items-center justify-center shrink-0 shadow-inner"
+            className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-white/20 flex items-center justify-center shrink-0 shadow-inner"
             aria-hidden="true"
           >
             <span className="font-anybody font-black text-xl sm:text-2xl leading-none">
@@ -92,11 +87,11 @@ export const OptionButton: React.FC<OptionButtonProps> = ({
           </div>
 
           <div className="flex flex-col min-w-0 flex-1">
-            <span className="text-xs uppercase tracking-wider opacity-85 font-anybody font-extrabold">
+            <span className="text-xs uppercase tracking-wider font-anybody font-extrabold">
               OPSI {optionId} • {config.name}
             </span>
             {text && (
-              <span className="font-space font-bold text-base sm:text-lg lg:text-xl leading-snug line-clamp-2 drop-shadow-sm">
+              <span className="font-space font-bold text-base sm:text-lg lg:text-xl leading-snug whitespace-pre-wrap [overflow-wrap:anywhere]">
                 {text}
               </span>
             )}
@@ -110,7 +105,7 @@ export const OptionButton: React.FC<OptionButtonProps> = ({
               <div className="font-anybody font-black text-xl sm:text-2xl tabular-nums leading-none">
                 {voteCount}
               </div>
-              <div className="text-xs opacity-80 font-space font-semibold tabular-nums">
+              <div className="text-xs font-space font-semibold tabular-nums">
                 {votePercentage.toFixed(0)}%
               </div>
             </div>
