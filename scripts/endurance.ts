@@ -16,10 +16,14 @@ async function main() {
     players: { type: 'string', default: '100' }, questions: { type: 'string', default: '40' },
     seconds: { type: 'string', default: '5' }, report: { type: 'string', default: 'reports/endurance.json' },
     rounds: { type: 'string', default: '1' }, browser: { type: 'boolean', default: false },
+    'browser-players': { type: 'string' },
     database: { type: 'string' },
   } });
   const playersCount = Number(values.players), questions = Number(values.questions), seconds = Number(values.seconds);
   const rounds = Number(values.rounds);
+  const browserPlayers = Number(values['browser-players'] ?? (values.browser ? 1 : 0));
+  assert(Number.isInteger(browserPlayers) && browserPlayers >= 0 && browserPlayers <= playersCount, 'browser-players must be 0..players');
+  values.browser = browserPlayers > 0;
   assert(Number.isInteger(rounds) && rounds >= 1 && rounds <= 20, 'rounds must be 1..20');
   assert(!values.browser || rounds === 1, 'Browser run supports one match; run lifecycle tests separately.');
   for (const [name, value, min, max] of [['players', playersCount, 1, 150], ['questions', questions, 1, 200], ['seconds', seconds, 5, 120]] as const) {
@@ -27,6 +31,7 @@ async function main() {
   }
   const reportPath = resolve(values.report!);
   const samples: Sample[] = [], latencies: number[] = [];
+  const socketCloses: unknown[] = [];
   const clients: { socket: Socket; view?: RoomView }[] = [];
   const hostKey = randomUUID();
   const worker = spawn(process.execPath, ['--import', 'tsx', resolve('scripts/enduranceServer.ts')], {
@@ -45,6 +50,7 @@ async function main() {
   });
   worker.on('message', (message: { type: string; row?: Sample }) => {
     if (message.type === 'sample' && message.row) samples.push(message.row);
+    if (message.type === 'socket-close') socketCloses.push(message);
   });
   const startedAt = new Date().toISOString(), started = performance.now();
   const abort = () => { failure ??= Error('Interrupted'); };
@@ -91,7 +97,7 @@ async function main() {
         questions: Array.from({ length: questions }, (_, i) => ({ id: `q${i}`, question: `Question ${i + 1}`,
           options: ['A', 'B', 'C', 'D'].map(id => ({ id, text: id })), correctOption: 'B', timerSeconds: seconds })) };
       const owner = await request<SessionCredentials>(host.socket, 'room:create', { quiz, hostKey, requestId: randomUUID() });
-      const players = await Promise.all(Array.from({ length: playersCount - (values.browser ? 1 : 0) }, async (_, i) => {
+      const players = await Promise.all(Array.from({ length: playersCount - browserPlayers }, async (_, i) => {
         const client = await connect();
         const name = `P${String.fromCharCode(65 + Math.floor(i / 26))}${String.fromCharCode(65 + i % 26)}`;
         const identity = await request<SessionCredentials>(client.socket, 'room:join', { code: owner.code, name, requestId: randomUUID() });
@@ -101,9 +107,10 @@ async function main() {
         const view = await request<RoomView>(host.socket, 'session:resume', owner);
         await request(host.socket, 'host:command', { sessionId: owner.sessionId, revision: view.revision, action });
       };
-      let browserReady = false, browserDone = false, browserIdentity: SessionCredentials | undefined;
+      let browserReady = false, browserDone = false;
+      let browserIdentities: SessionCredentials[] = [];
       if (values.browser) {
-        browserProcess = spawn('python', [resolve('scripts/enduranceBrowser.py')], {
+        browserProcess = spawn('python', [resolve(browserPlayers > 1 ? 'scripts/enduranceFleet.py' : 'scripts/enduranceBrowser.py')], {
           env: { ...process.env, PYTHONPATH: resolve('reports/python') },
           stdio: ['pipe', 'pipe', 'inherit'], windowsHide: true,
         });
@@ -112,13 +119,13 @@ async function main() {
         createInterface({ input: browserProcess.stdout! }).on('line', line => {
           try {
             const message = JSON.parse(line);
-            if (message.type === 'ready') { browserReady = true; browserIdentity = message.identity; }
+            if (message.type === 'ready') { browserReady = true; browserIdentities = message.identities ?? [message.identity]; }
             if (message.type === 'done') { browserDone = true; browserReport = message.report; }
             if (message.type === 'error') failure ??= Error(message.error);
           } catch { failure ??= Error('Invalid browser runner output'); }
         });
-        browserProcess.stdin!.end(JSON.stringify({ url, owner, questions, seconds, report: reportPath + '.browser.json' }) + '\n');
-        await until(() => browserReady, 'browser startup and lobby', 90000);
+        browserProcess.stdin!.end(JSON.stringify({ url, owner, questions, seconds, players: browserPlayers, report: reportPath + '.browser.json' }) + '\n');
+        await until(() => browserReady, 'browser startup and lobby', 180000);
       }
       phase('game');
       if (!values.browser) await command('start');
@@ -158,14 +165,23 @@ async function main() {
       }
       if (values.browser) {
         await until(() => browserDone, 'browser final verification', 30000);
-        assert(browserIdentity);
-        const view = await request<RoomView>(host.socket, 'session:resume', browserIdentity);
-        const player = view.players[browserIdentity.playerId!];
-        assert.equal(Object.keys(player.answers).length, questions);
-        assert(Object.values(player.answers).every(a => a.selectedOption === 'B' && a.isCorrect));
-        assert.equal(player.score, Object.values(player.answers).reduce((sum, a) => sum + a.pointsEarned, 0));
+        assert.equal(browserIdentities.length, browserPlayers);
+        for (const identity of browserIdentities) {
+          const view = await request<RoomView>(host.socket, 'session:resume', identity);
+          const player = view.players[identity.playerId!];
+          assert.equal(Object.keys(player.answers).length, questions);
+          assert(Object.values(player.answers).every(a => a.selectedOption === 'B' && a.isCorrect));
+          let total = 0;
+          for (const answer of Object.values(player.answers)) {
+            const expected = 1000 + Math.max(1, Math.round(1000 * Math.exp(-4 * answer.responseDurationMs / (seconds * 1000))));
+            assert.equal(answer.pointsEarned, expected); total += expected;
+          }
+          assert.equal(player.score, total);
+        }
+        // Restore host binding after reading private player receipts.
+        await request(host.socket, 'session:resume', owner);
       }
-      assert.equal(latencies.length, (playersCount - (values.browser ? 1 : 0)) * questions * (round + 1));
+      assert.equal(latencies.length, (playersCount - browserPlayers) * questions * (round + 1));
       phase('cleanup');
       await command('reset');
       stopping = true;
@@ -201,12 +217,12 @@ async function main() {
       } : null];
     }));
     const report = { passed: !failure, error: failure?.message ?? null, startedAt, elapsedMs: performance.now() - started,
-      config: { players: playersCount, questions, rounds, browser: values.browser, persistence: Boolean(values.database), questionSeconds: seconds, revealMs: 4000, scoreboardMs: values.browser ? 2000 : 1000 },
+      config: { players: playersCount, questions, rounds, browser: values.browser, browserPlayers, persistence: Boolean(values.database), questionSeconds: seconds, revealMs: 4000, scoreboardMs: values.browser ? 2000 : 1000 },
       environment: { node: process.version, platform: platform(), release: release(), cpu: cpus()[0]?.model, logicalCpus: cpus().length, totalMemoryBytes: totalmem(), serverPid: pid, workerExitCode },
-      scope: values.browser ? 'Production Next.js + Socket.io; 99 bots at default player count plus one Chromium player and Chromium Host; real clock; loopback; no physical phones; no server forced GC; browser post-game GC diagnostic only.' : 'Production Socket.io + game engine, real clock, isolated server process; loopback, no browser or physical phones; no forced GC.',
+      scope: values.browser ? `Production Next.js + Socket.io; ${playersCount - browserPlayers} bots plus ${browserPlayers} Chromium players and Chromium Host; real clock; loopback; no physical phones; server in a separate process; no server forced GC.` : 'Production Socket.io + game engine, real clock, isolated server process; loopback, no browser or physical phones; no forced GC.',
       completedQuestions, botAnswers: latencies.length,
-      acceptedAnswers: latencies.length + (browserReport ? questions : 0), unexpectedDisconnects: disconnected,
-      browserReport, cleanups,
+      acceptedAnswers: latencies.length + (browserReport ? questions * browserPlayers : 0), unexpectedDisconnects: disconnected,
+      browserReport, cleanups, socketCloses,
       ackMs: { p50: percentile(.5), p95: percentile(.95), p99: percentile(.99), max: sorted.at(-1) ?? null }, phases, samples };
     await mkdir(dirname(reportPath), { recursive: true });
     await writeFile(reportPath, JSON.stringify(report, null, 2) + '\n');
