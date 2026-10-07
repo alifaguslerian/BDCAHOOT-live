@@ -1,5 +1,6 @@
 'use client';
 
+import { questionTextSize, hasLongOptions } from '@/lib/questionLayout';
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { ProjectorHeader } from '@/components/common/ProjectorHeader';
 import { OptionButton } from '@/components/common/OptionButton';
@@ -74,7 +75,6 @@ export const QuestionView: React.FC<QuestionViewProps> = ({ roomCode }) => {
     return null;
   }
 
-  const isUrgent = secondsRemaining <= 5;
 
   return (
     <div className="min-h-screen bg-[#07090E] text-[#F5F7FA] flex flex-col justify-between selection:bg-[#F5A623] selection:text-black">
@@ -90,35 +90,19 @@ export const QuestionView: React.FC<QuestionViewProps> = ({ roomCode }) => {
       />
 
       {/* Main Question Display Area */}
-      <main className="flex-1 flex flex-col items-center justify-center p-6 max-w-6xl mx-auto w-full">
+      <main className="flex-1 flex flex-col items-center justify-center px-4 py-4 sm:px-8 lg:px-10 max-w-[1600px] mx-auto w-full">
         {/* Massive Prompt Text for Hall/Projector Visibility */}
-        <div className="w-full text-center py-6 px-4">
+        <div className="w-full text-center py-4">
           <div className="text-xs uppercase tracking-widest text-[#F5A623] font-anybody font-extrabold mb-3">
             PERTANYAAN {currentIdx + 1} DARI {totalQuestions}
           </div>
-          <h2 className="font-anybody font-black text-3xl sm:text-4xl md:text-5xl lg:text-6xl text-white leading-tight drop-shadow-md">
+          <h2 className={`font-space font-bold ${questionTextSize(currentQuestion.question)} text-white leading-snug whitespace-pre-wrap [overflow-wrap:anywhere]`}>
             {currentQuestion.question}
           </h2>
         </div>
 
-        {/* Big Central Countdown Badge */}
-        <div className="my-4 flex items-center justify-center">
-          <div
-            className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full border-4 flex flex-col items-center justify-center font-anybody font-black text-3xl sm:text-4xl shadow-2xl transition-all duration-300 tabular-nums ${
-              isUrgent
-                ? 'border-rose-500 bg-rose-500/20 text-rose-300 animate-pulse scale-105'
-                : 'border-[#F5A623] bg-[#F5A623]/10 text-[#F5A623]'
-            }`}
-          >
-            <span>{secondsRemaining}</span>
-            <span className="text-[10px] font-space font-semibold uppercase tracking-wider text-[#8B93A1] -mt-1">
-              DETIK
-            </span>
-          </div>
-        </div>
-
         {/* 4 Large Geometric Options in 2x2 Grid */}
-        <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mt-4">
+        <div className={`w-full grid grid-cols-1 ${hasLongOptions(currentQuestion.options) ? '' : 'md:grid-cols-2'} gap-3 sm:gap-4 mt-4`}>
           {currentQuestion.options.map((opt) => {
             const optId = opt.id as OptionId;
             return (

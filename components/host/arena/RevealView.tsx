@@ -1,5 +1,6 @@
 'use client';
 
+import { questionTextSize, hasLongOptions } from '@/lib/questionLayout';
 import React, { useEffect, useState, useRef } from 'react';
 import { OptionButton } from '@/components/common/OptionButton';
 import { useGame } from '@/context/GameContext';
@@ -90,10 +91,10 @@ export const RevealView: React.FC<RevealViewProps> = ({ roomCode }) => {
       </header>
 
       {/* Main Content: Question prompt + Correct Highlight + Distribution Chart */}
-      <main className="flex-1 flex flex-col items-center justify-center p-6 max-w-6xl mx-auto w-full">
+      <main className="flex-1 flex flex-col items-center justify-center px-4 py-4 sm:px-8 lg:px-10 max-w-[1600px] mx-auto w-full">
         {/* Question Title Recap */}
-        <div className="text-center py-2 px-4 max-w-4xl">
-          <h2 className="font-anybody font-bold text-2xl sm:text-3xl text-white/90 line-clamp-2">
+        <div className="w-full text-center py-2">
+          <h2 className={`font-space font-bold ${questionTextSize(currentQuestion.question)} text-white/90 leading-snug whitespace-pre-wrap [overflow-wrap:anywhere]`}>
             {currentQuestion.question}
           </h2>
         </div>
@@ -165,7 +166,7 @@ export const RevealView: React.FC<RevealViewProps> = ({ roomCode }) => {
         </div>
 
         {/* 4 Option Buttons (with Winning Highlight & Losers Dimmed) */}
-        <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mt-2">
+        <div className={`w-full grid grid-cols-1 ${hasLongOptions(currentQuestion.options) ? '' : 'md:grid-cols-2'} gap-3 sm:gap-4 mt-2`}>
           {currentQuestion.options.map((opt) => {
             const optId = opt.id as OptionId;
             const isCorrect = optId === correctOptId;
