@@ -1,6 +1,7 @@
 'use client';
 import type { PublicQuestion } from '@/types/network';
 
+import { hasLongOptions } from '@/lib/questionLayout';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Clock,
@@ -48,7 +49,7 @@ const OPTION_STYLES: Record<
     bgColor: 'bg-[#EF4444]',
     borderColor: 'border-[#DC2626]',
     activeBorderColor: 'border-red-400',
-    textColor: 'text-white',
+    textColor: 'text-[#111827]',
     glowColor: 'shadow-red-500/50',
     ringColor: 'ring-red-400',
   },
@@ -59,7 +60,7 @@ const OPTION_STYLES: Record<
     bgColor: 'bg-[#3B82F6]',
     borderColor: 'border-[#2563EB]',
     activeBorderColor: 'border-blue-400',
-    textColor: 'text-white',
+    textColor: 'text-[#111827]',
     glowColor: 'shadow-blue-500/50',
     ringColor: 'ring-blue-400',
   },
@@ -70,7 +71,7 @@ const OPTION_STYLES: Record<
     bgColor: 'bg-[#F59E0B]',
     borderColor: 'border-[#D97706]',
     activeBorderColor: 'border-amber-400',
-    textColor: 'text-black',
+    textColor: 'text-[#111827]',
     glowColor: 'shadow-amber-500/50',
     ringColor: 'ring-amber-400',
   },
@@ -81,7 +82,7 @@ const OPTION_STYLES: Record<
     bgColor: 'bg-[#10B981]',
     borderColor: 'border-[#059669]',
     activeBorderColor: 'border-emerald-400',
-    textColor: 'text-white',
+    textColor: 'text-[#111827]',
     glowColor: 'shadow-emerald-500/50',
     ringColor: 'ring-emerald-400',
   },
@@ -178,7 +179,7 @@ export function PlayerQuestionView({
   );
 
   return (
-    <div className="w-full max-w-md mx-auto min-h-screen flex flex-col justify-between p-3 sm:p-5 bg-[#0B0E14] text-[#E1E2EB] select-none">
+    <div className="w-full max-w-md mx-auto min-h-[calc(100svh-49px)] flex flex-col justify-between p-3 sm:p-5 bg-[#0B0E14] text-[#E1E2EB] select-none">
       {/* Top Header Bar */}
       <header className="flex flex-col gap-2">
         <div className="flex items-center justify-between text-xs font-space border-b border-[#1E2530] pb-2 text-[#8B93A1]">
@@ -233,7 +234,7 @@ export function PlayerQuestionView({
           </div>
 
           {showQuestionText && (
-            <p className="mt-2 text-xs sm:text-sm font-space font-medium text-[#F5F7FA] leading-relaxed line-clamp-3">
+            <p className="mt-2 text-sm sm:text-base font-space font-medium text-[#F5F7FA] leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">
               {question.question}
             </p>
           )}
@@ -241,6 +242,7 @@ export function PlayerQuestionView({
       </header>
 
       {/* Dynamic Status / Submission Banner (D16) */}
+      <div data-answer-status className="min-h-[84px] flex flex-col justify-center [&>div]:my-0" aria-live="polite">
       {submissionError && !hasServerRecord ? (
         <div className="my-2 p-3 rounded-xl bg-[#EF4444]/15 border border-[#EF4444] flex items-center justify-between animate-in fade-in slide-in-from-top-1 duration-200">
           <div className="flex items-center gap-2">
@@ -313,11 +315,12 @@ export function PlayerQuestionView({
           </span>
         </div>
       )}
+      </div>
 
       {pendingOption && !answerConfirmed && submissionStatus !== 'transmitting' && <button className="p-3 border rounded text-[#FFC880]" onClick={() => handleSelectOption(pendingOption)}>Konfirmasi belum diterima. Kirim ulang pilihan {pendingOption}</button>}
       {/* 4 Large Colored Tap Cards (D15 Mobile Grid) */}
       <main className="flex-1 flex flex-col justify-center py-2">
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 h-full min-h-[320px] sm:min-h-[380px]">
+        <div className={`grid ${hasLongOptions(question.options, 80) ? 'grid-cols-1' : 'grid-cols-2'} gap-3 sm:gap-4 min-h-[320px] sm:min-h-[380px]`}>
           {(['A', 'B', 'C', 'D'] as OptionId[]).map((opt) => {
             const style = OPTION_STYLES[opt];
             const isSelected = selectedOption === opt;
@@ -331,38 +334,38 @@ export function PlayerQuestionView({
                 type="button"
                 disabled={isCardDisabled || Boolean(pendingOption && pendingOption !== opt)}
                 onClick={() => handleSelectOption(opt)}
-                className={`group relative flex flex-col justify-between p-4 rounded-2xl border-2 transition-all duration-150 text-left cursor-pointer active:scale-95 ${
-                  style.bgColor
+                className={`group relative min-w-0 flex flex-col justify-between p-4 rounded-2xl border-2 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-150 text-left cursor-pointer active:scale-95 ${
+                  style.bgColor + ' ' + style.textColor
                 } ${
                   isSelected
                     ? `border-white ring-4 ${style.ringColor} shadow-2xl scale-[1.02] z-10 opacity-100`
                     : isDimmed
-                    ? 'opacity-25 pointer-events-none border-transparent grayscale-[40%]'
+                    ? 'saturate-50 pointer-events-none border-transparent'
                     : isCardDisabled
-                    ? 'opacity-40 cursor-not-allowed border-transparent'
+                    ? 'saturate-50 cursor-not-allowed border-transparent'
                     : `${style.borderColor} hover:brightness-110 shadow-lg`
                 }`}
               >
                 {/* Card Header (Shape & Letter) */}
                 <div className="flex items-center justify-between w-full">
-                  <span className="font-anybody font-black text-2xl sm:text-3xl text-white/90 drop-shadow-md">
+                  <span className="font-anybody font-black text-2xl sm:text-3xl">
                     {style.label}
                   </span>
-                  <span className="text-xl sm:text-2xl text-white/80 font-bold drop-shadow">
+                  <span className="text-xl sm:text-2xl font-bold">
                     {style.shapeChar}
                   </span>
                 </div>
 
                 {/* Option Text preview (Concise) */}
                 <div className="my-auto py-2">
-                  <p className="text-xs sm:text-sm font-space font-bold text-white drop-shadow leading-snug line-clamp-2">
+                  <p className="text-sm sm:text-base font-space font-bold leading-snug whitespace-pre-wrap [overflow-wrap:anywhere]">
                     {optData?.text || `Pilihan ${opt}`}
                   </p>
                 </div>
 
                 {/* Selection Indicator */}
                 <div className="w-full flex items-center justify-between pt-1 border-t border-white/20">
-                  <span className="text-[10px] font-space font-bold uppercase tracking-wider text-white/80">
+                  <span className="text-[10px] font-space font-bold uppercase tracking-wider">
                     {style.shape}
                   </span>
                   {isSelected && (
@@ -378,7 +381,7 @@ export function PlayerQuestionView({
       </main>
 
       {/* Footer Instructions / Locked Hint */}
-      <footer className="py-2 text-center text-xs font-space text-[#8B93A1]">
+      <footer className="min-h-12 py-2 text-center text-xs font-space text-[#8B93A1]">
         {isLocked ? (
           <p className="animate-pulse text-[#D7C3AE]">
             Perhatikan layar proyektor untuk pembahasan saat waktu habis...

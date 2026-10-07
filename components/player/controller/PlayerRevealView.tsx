@@ -169,9 +169,9 @@ export function PlayerRevealView({
               </span>
             </div>
 
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-[#8B93A1]">Kunci Jawaban:</span>
-              <span className="font-anybody font-bold text-sm text-[#85E28A]">
+            <div className="flex justify-between items-start gap-3 text-xs">
+              <span className="shrink-0 text-[#8B93A1]">Kunci Jawaban:</span>
+              <span className="min-w-0 text-right whitespace-pre-wrap [overflow-wrap:anywhere] font-anybody font-bold text-sm text-[#85E28A]">
                 PILIHAN {correctOption} ({question.options.find((o) => o.id === correctOption)?.text || ''})
               </span>
             </div>
