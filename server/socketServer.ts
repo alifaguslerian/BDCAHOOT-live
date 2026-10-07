@@ -17,6 +17,12 @@ export function createSocketServer(http: HttpServer, options: Options) {
   let storageFailure: Error | undefined, closing = false, publishing = false;
   let writing: Promise<void> | undefined;
   let pendingRequests = 0;
+  const timings = {
+    answers: 0, answerProcessingMs: 0, answerProcessingMaxMs: 0,
+    answerCommitWaitMs: 0, answerCommitWaitMaxMs: 0,
+    commits: 0, snapshotMs: 0, snapshotMaxMs: 0, snapshotMaxBytes: 0,
+    storageMs: 0, storageMaxMs: 0, broadcasts: 0, broadcastMs: 0, broadcastMaxMs: 0,
+  };
   const connectionsByAddress = new Map<string, number>();
   const addressLimit = options.maxConnectionsPerAddress ?? 200;
   if (!Number.isInteger(addressLimit) || addressLimit < 1) throw Error('Batas koneksi tidak valid.');
@@ -68,20 +74,31 @@ export function createSocketServer(http: HttpServer, options: Options) {
     }
   }
 
-  async function flush(): Promise<void> {
+  async function flush(targetVersion?: number): Promise<void> {
     if (!options.persistence) return;
-    while (committed < generation) {
+    while (committed < (targetVersion ?? generation)) {
       if (storageFailure) throw storageFailure;
       if (!writing) {
+        const snapshotStarted = performance.now();
         const version = generation;
         const codes = new Set(engine.roomCodes());
         for (const [id, entry] of creations) if (!codes.has(entry.credentials.code)) creations.delete(id);
         const data = serialize({ version: 1, rooms: engine.snapshot(), creations });
+        const storageStarted = performance.now();
+        const snapshotMs = storageStarted - snapshotStarted;
+        timings.snapshotMs += snapshotMs;
+        timings.snapshotMaxMs = Math.max(timings.snapshotMaxMs, snapshotMs);
+        timings.snapshotMaxBytes = Math.max(timings.snapshotMaxBytes, data.byteLength);
         let timeout: ReturnType<typeof setTimeout>;
         const deadline = new Promise<never>((_, reject) => {
           timeout = setTimeout(() => reject(Error('Storage commit timed out')), 5000);
         });
-        writing = Promise.race([options.persistence.save(data), deadline]).then(() => { committed = version; }).catch(error => {
+        writing = Promise.race([options.persistence.save(data), deadline]).then(() => {
+          committed = version;
+          const storageMs = performance.now() - storageStarted;
+          timings.commits++; timings.storageMs += storageMs;
+          timings.storageMaxMs = Math.max(timings.storageMaxMs, storageMs);
+        }).catch(error => {
           storageFailure = error instanceof Error ? error : Error('Storage failure');
           console.error('Penyimpanan pertandingan gagal. Permainan dihentikan; periksa disk lalu restart server.');
           for (const socket of io.sockets.sockets.values()) socket.conn.close();
@@ -91,7 +108,7 @@ export function createSocketServer(http: HttpServer, options: Options) {
       await writing;
     }
     if (storageFailure) throw storageFailure;
-    engine.activateCommittedQuestions();
+    if (committed === generation) engine.activateCommittedQuestions();
   }
   const ready = flush();
 
@@ -111,13 +128,29 @@ export function createSocketServer(http: HttpServer, options: Options) {
     socket.data.tokens--;
     return true;
   }
-  async function handle<T>(socket: GameSocket, ack: ((reply: Reply<T>) => void) | undefined, operation: () => T | Promise<T>, committedResult?: () => T) {
+  async function handle<T>(socket: GameSocket, ack: ((reply: Reply<T>) => void) | undefined, operation: () => T | Promise<T>, committedResult?: () => T, ownCommitOnly = false) {
     if (typeof ack !== 'function') return;
     if (storageFailure || closing) { ack({ success: false, error: 'Penyimpanan tidak tersedia. Tunggu server pulih.', code: 'UNKNOWN' }); return; }
     if (!takeToken(socket)) { ack({ success: false, error: 'Terlalu banyak permintaan. Coba lagi sebentar.', code: 'RATE_LIMIT' }); return; }
     if (socket.data.pending >= 8 || pendingRequests >= 1000) { ack({ success: false, error: 'Server sedang menyimpan. Coba lagi sebentar.', code: 'RATE_LIMIT' }); return; }
     socket.data.pending++; pendingRequests++;
-    try { const operationResult = operation(); const data = operationResult instanceof Promise ? await operationResult : operationResult; await flush(); ack({ success: true, data: committedResult ? committedResult() : data }); }
+    const started = performance.now();
+    try {
+      const operationResult = operation();
+      const data = operationResult instanceof Promise ? await operationResult : operationResult;
+      const processed = performance.now();
+      // An answer receipt is immutable. Later writes must not delay its durable ACK.
+      // Mutable room views/broadcasts still wait until all outstanding state is durable.
+      await flush(ownCommitOnly ? generation : undefined);
+      if (ownCommitOnly) {
+        const processingMs = processed - started, waitMs = performance.now() - processed;
+        timings.answers++; timings.answerProcessingMs += processingMs;
+        timings.answerProcessingMaxMs = Math.max(timings.answerProcessingMaxMs, processingMs);
+        timings.answerCommitWaitMs += waitMs;
+        timings.answerCommitWaitMaxMs = Math.max(timings.answerCommitWaitMaxMs, waitMs);
+      }
+      ack({ success: true, data: committedResult ? committedResult() : data });
+    }
     catch (error) { ack({ success: false, error: storageFailure ? 'Konfirmasi penyimpanan gagal. Tunggu server pulih.' : error instanceof Error ? error.message : 'Permintaan tidak valid.', ...(storageFailure ? { code: 'UNKNOWN' } : {}) }); }
     finally { socket.data.pending--; pendingRequests--; }
   }
@@ -182,7 +215,7 @@ export function createSocketServer(http: HttpServer, options: Options) {
       bind(socket, payload);
       return engine.view(credentials(socket));
     }, () => engine.view(credentials(socket))));
-    socket.on('answer:submit', (payload, ack) => handle(socket, ack, () => engine.submit(credentials(socket), payload)));
+    socket.on('answer:submit', (payload, ack) => handle(socket, ack, () => engine.submit(credentials(socket), payload), undefined, true));
     socket.on('host:command', (payload, ack) => handle(socket, ack, () => {
       const session = engine.command(credentials(socket), payload);
       if (session) bind(socket, session);
@@ -207,6 +240,7 @@ export function createSocketServer(http: HttpServer, options: Options) {
     finally { publishing = false; }
   }
   function broadcast() {
+    const started = performance.now();
     const activeCodes = new Set(engine.roomCodes());
     for (const [id, value] of creations) if (!activeCodes.has(value.credentials.code)) creations.delete(id);
     for (const [address, failure] of operatorFailures) if (failure.expires <= Date.now()) operatorFailures.delete(address);
@@ -225,6 +259,9 @@ export function createSocketServer(http: HttpServer, options: Options) {
       socket.data.needsState = false;
     }
     dirtyRooms.clear(); dirtyCounts.clear();
+    const elapsed = performance.now() - started;
+    timings.broadcasts++; timings.broadcastMs += elapsed;
+    timings.broadcastMaxMs = Math.max(timings.broadcastMaxMs, elapsed);
   }
   const interval = setInterval(() => {
     if (closing || storageFailure) return;
@@ -237,7 +274,7 @@ export function createSocketServer(http: HttpServer, options: Options) {
   }, 100);
   interval.unref();
   let closePromise: Promise<void> | undefined;
-  return { io, engine, ready, close: () => closePromise ??= (async () => {
+  return { io, engine, ready, diagnostics: () => ({ ...timings }), close: () => closePromise ??= (async () => {
     closing = true;
     clearInterval(interval);
     try { if (!storageFailure) { generation++; await flush(); } }
