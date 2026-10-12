@@ -1,6 +1,7 @@
 'use client';
 
 import { CountdownView } from '@/components/common/CountdownView';
+import { PodiumReadyView } from '@/components/common/PodiumReadyView';
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGame } from '@/context/GameContext';
@@ -82,7 +83,9 @@ export function PlayerControllerContainer({ roomCode }: PlayerControllerContaine
       );
 
     case 'SCOREBOARD':
-      return <><PlayerRoomControls /><PlayerScoreboardView player={player} /></>;
+      return <><PlayerRoomControls />{room.currentQuestionIndex >= room.totalQuestions - 1
+        ? <PodiumReadyView />
+        : <PlayerScoreboardView player={player} />}</>;
 
     case 'FINAL':
       return <PlayerFinalView player={player} />;
