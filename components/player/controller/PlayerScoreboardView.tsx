@@ -39,7 +39,6 @@ export function PlayerScoreboardView({ player }: PlayerScoreboardViewProps) {
   const totalQuestionsDone = room.currentQuestionIndex + 1;
   const answersList = Object.values(player.answers);
   const correctCount = answersList.filter((a) => a.isCorrect).length;
-  const isLastQuestion = room.currentQuestionIndex >= room.totalQuestions - 1;
 
   return (
     <div className="w-full max-w-md mx-auto min-h-screen flex flex-col justify-between p-4 sm:p-6 bg-[#0B0E14] text-[#E1E2EB] select-none">
@@ -154,11 +153,7 @@ export function PlayerScoreboardView({ player }: PlayerScoreboardViewProps) {
       {/* Waiting Footer */}
       <footer className="py-2 text-center text-xs font-space text-[#8B93A1] flex items-center justify-center gap-2">
         <Radio className="w-4 h-4 text-[#F5A623] animate-pulse" />
-        <span>
-          {isLastQuestion
-            ? 'Menunggu host menampilkan podium juara...'
-            : 'Menunggu host melanjutkan ke soal berikutnya...'}
-        </span>
+        <span>Menunggu host melanjutkan ke soal berikutnya...</span>
       </footer>
     </div>
   );
