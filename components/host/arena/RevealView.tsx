@@ -25,6 +25,7 @@ export const RevealView: React.FC<RevealViewProps> = ({ roomCode }) => {
   const totalPlayers = Object.keys(room.players).length;
   const currentIdx = room.currentQuestionIndex;
   const totalQuestions = room.totalQuestions;
+  const isLastQuestion = currentIdx >= totalQuestions - 1;
   const revealDurationMs = room.settings.revealDurationMs || REVEAL_DURATION_MS;
 
   const [remainingSec, setRemainingSec] = useState<number>(Math.ceil(revealDurationMs / 1000));
@@ -76,7 +77,7 @@ export const RevealView: React.FC<RevealViewProps> = ({ roomCode }) => {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#181F2C] border border-[#232C3E] text-xs font-space text-[#8B93A1]">
             <Clock className="w-3.5 h-3.5 text-[#F5A623]" />
-            <span>Menuju Klasemen: <strong>{remainingSec}s</strong></span>
+            <span>{isLastQuestion ? 'Menuju Pengumuman' : 'Menuju Klasemen'}: <strong>{remainingSec}s</strong></span>
           </div>
 
           <button
@@ -84,7 +85,7 @@ export const RevealView: React.FC<RevealViewProps> = ({ roomCode }) => {
             onClick={handleAdvance}
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-[#F5A623] to-[#FF8C00] text-black font-anybody font-extrabold text-sm hover:brightness-110 active:scale-95 transition-all shadow-md"
           >
-            <span>Klasemen</span>
+            <span>{isLastQuestion ? 'Lanjut' : 'Klasemen'}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>
