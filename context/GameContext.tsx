@@ -216,13 +216,21 @@ function useGameState() {
     return true;
   }
   async function command(action: HostCommand['action'], playerId?: string) {
-    const socket = socketRef.current, current = roomRef.current;
-    if (!socket?.connected || !credentials.current || !authenticated.current || hostInFlight.current) { setError('Server belum terhubung atau aksi masih diproses.'); return false; }
+    const socket = socketRef.current, current = roomRef.current, session = credentials.current;
+    if (!socket?.connected || !session || !authenticated.current || hostInFlight.current) { setError('Server belum terhubung atau aksi masih diproses.'); return false; }
     hostInFlight.current = true;
     setHostLoading(true);
     const result = await request<SessionCredentials | undefined>(ack => socket.timeout(6000).emit('host:command', { sessionId: current.sessionId, revision: current.revision, action, playerId }, ack));
     hostInFlight.current = false;
     setHostLoading(false);
+    // A committed FINAL broadcast can arrive even when its command ACK is lost.
+    const latest = roomRef.current;
+    if (!result.success && result.code === 'UNKNOWN' && action === 'finish'
+      && credentials.current?.token === session.token && latest.sessionId === current.sessionId
+      && latest.stage === 'FINAL' && latest.revision > current.revision) {
+      setError(null);
+      return true;
+    }
     if (!result.success) setError(result.error); else { setError(null); if (result.data) await resumeNow(result.data); }
     if (result.success && action === 'reset') clearSession();
     return result.success;
