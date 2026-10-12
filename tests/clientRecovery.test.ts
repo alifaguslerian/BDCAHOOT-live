@@ -357,3 +357,91 @@ test('returning to a visible page refreshes a stale question snapshot', async ()
     await act(async () => { assert.equal((await f.state.submitAnswer(f.state.currentPlayerId!, 'B')).success, true); });
   } finally { await f.close(); }
 });
+
+async function hostAtPodiumWait() {
+  const f = await fixture();
+  try {
+    const player = f.service.engine.join(f.owner.code, 'ALDI', randomUUID());
+    const command = (action: 'start' | 'next') => f.service.engine.command(f.owner, {
+      action, sessionId: f.owner.sessionId, revision: f.service.engine.view(f.owner).revision,
+    });
+    command('start'); f.advance(5000);
+    for (let index = 0; index < 3; index++) {
+      f.service.engine.submit(player, { sessionId: f.owner.sessionId, questionIndex: index, submissionId: randomUUID(), option: 'B' });
+      f.advance(35000);
+      if (index < 2) command('next');
+    }
+    f.dom.window.sessionStorage.setItem('bdcahoot_session', JSON.stringify(f.owner));
+    f.dom.window.history.replaceState({}, '', `/host/room/${f.owner.code}`);
+    await f.remount();
+    assert.equal(f.state.role, 'host');
+    assert.equal(f.state.room.stage, 'SCOREBOARD');
+    assert.equal(f.state.room.currentQuestionIndex, 2);
+    return f;
+  } catch (error) { await f.close(); throw error; }
+}
+
+test('podium: lost finish ACK must not report failure after the authoritative FINAL arrives', { timeout: 15000 }, async () => {
+  const f = await hostAtPodiumWait();
+  try {
+    const scores = f.state.rankings;
+    let dropped = false;
+    for (const socket of f.service.io.sockets.sockets.values()) socket.use((packet, next) => {
+      if (packet[0] === 'host:command' && packet[1].action === 'finish') { dropped = true; packet[2] = () => {}; }
+      next();
+    });
+    let pending!: Promise<boolean>;
+    await act(async () => { pending = f.state.finishQuiz(); });
+    await f.until(() => f.state.room.stage === 'FINAL');
+    let success = false;
+    await act(async () => { success = await pending; });
+    assert.equal(dropped, true);
+    assert.equal(success, true);
+    assert.equal(f.state.error, null);
+    assert.equal(f.state.isHostActionLoading, false);
+    assert.deepEqual(f.state.rankings, scores);
+  } finally { await f.close(); }
+});
+
+test('podium: rapid finish attempts emit only one command and preserve scores', async () => {
+  const f = await hostAtPodiumWait();
+  try {
+    const scores = f.state.rankings;
+    let release: (() => void) | undefined;
+    let commands = 0;
+    for (const socket of f.service.io.sockets.sockets.values()) socket.use((packet, next) => {
+      if (packet[0] === 'host:command' && packet[1].action === 'finish') { commands++; release = next; }
+      else next();
+    });
+    let pending!: Promise<boolean[]>;
+    await act(async () => { pending = Promise.all(Array.from({ length: 25 }, () => f.state.finishQuiz())); });
+    await f.until(() => Boolean(release));
+    assert.equal(commands, 1);
+    assert.equal(f.state.room.stage, 'SCOREBOARD');
+    assert.equal(f.state.isHostActionLoading, true);
+    await act(async () => { release!(); assert.equal((await pending).filter(Boolean).length, 1); });
+    await f.until(() => f.state.room.stage === 'FINAL');
+    assert.equal(f.state.error, null);
+    assert.equal(f.state.isHostActionLoading, false);
+    assert.deepEqual(f.state.rankings, scores);
+  } finally { await f.close(); }
+});
+
+test('podium: an undelivered finish times out, unlocks and can be retried', { timeout: 15000 }, async () => {
+  const f = await hostAtPodiumWait();
+  try {
+    let dropped = false;
+    for (const socket of f.service.io.sockets.sockets.values()) socket.use((packet, next) => {
+      if (packet[0] === 'host:command' && packet[1].action === 'finish' && !dropped) { dropped = true; return; }
+      next();
+    });
+    await act(async () => { assert.equal(await f.state.finishQuiz(), false); });
+    assert.equal(dropped, true);
+    assert.equal(f.state.room.stage, 'SCOREBOARD');
+    assert.equal(f.state.isHostActionLoading, false);
+    assert.match(f.state.error!, /Konfirmasi belum diterima/);
+    await act(async () => { assert.equal(await f.state.finishQuiz(), true); });
+    await f.until(() => f.state.room.stage === 'FINAL');
+    assert.equal(f.state.error, null);
+  } finally { await f.close(); }
+});
