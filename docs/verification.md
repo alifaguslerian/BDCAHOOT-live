@@ -1,5 +1,26 @@
 # Verification — 29 September 2026
 
+Audit lanjutan 11 Oktober 2026: lihat [audit podium](podium-audit-2026-10-11.md).
+Satu bug pesan gagal akibat ACK finish hilang diperbaiki. Suite kini **63/63
+lulus**, disertai tes Chrome untuk ACK/perintah hilang, klik berulang, offline,
+reconnect, dan urutan podium. Laporan juga mencatat batasan bahwa peringkat
+disembunyikan secara visual tetapi masih dapat dibaca dari paket jaringan.
+
+Pembaruan 11 Oktober 2026: setelah preview jawaban terakhir, host melihat tombol
+“Lihat Podium Juara” di tengah dan pemain melihat pesan menunggu. Scoreboard
+antarsoal tetap tampil. Stage internal tetap `SCOREBOARD` hingga host membuka
+`FINAL`; perhitungan skor, persistence, dan animasi podium tidak berubah.
+
+- `python scripts/check-podium-transition.py`: lulus pada build produksi, Chrome,
+  SQLite sementara di port 3138, kuis satu dan dua soal. Sebelum perubahan, tes
+  gagal karena Top 10 masih tampil setelah soal terakhir.
+- Memeriksa preview otomatis, scoreboard antarsoal, layar tunggu tanpa peringkat,
+  refresh host/pemain, tombol terpusat pada 1366×768 dan 390×844 tanpa overflow
+  horizontal, aktivasi melalui Enter, transisi FINAL, dan skor tetap sama.
+- `npm run test`: 58/58 lulus. Build, typecheck, dan lint lulus.
+- Hasil lokal: `reports/podium-transition.json` beserta screenshot `podium-*.png`.
+  Ini tes alur UI dengan satu pemain per room, bukan pengujian beban event baru.
+
 Pembaruan 7 Oktober 2026: lihat [tindak lanjut audit](audit-follow-up-2026-10-07.md)
 untuk perbaikan ACK/kontras/layout, 58 tes regresi, tes recovery, hasil 80 peserta
 campuran × 40 soal, serta percobaan gagal dan keterbatasan yang tetap dicatat.
