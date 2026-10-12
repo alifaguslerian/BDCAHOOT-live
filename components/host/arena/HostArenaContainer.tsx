@@ -1,6 +1,7 @@
 'use client';
 
 import { CountdownView } from '@/components/common/CountdownView';
+import { PodiumReadyView } from '@/components/common/PodiumReadyView';
 import React from 'react';
 import Link from 'next/link';
 import { useGame } from '@/context/GameContext';
@@ -73,7 +74,9 @@ export const HostArenaContainer: React.FC<HostArenaContainerProps> = ({ roomCode
     case 'REVEAL':
       return <><HostRoomControls /><RevealView roomCode={activeRoomCode} /></>;
     case 'SCOREBOARD':
-      return <><HostRoomControls /><ScoreboardView roomCode={activeRoomCode} /></>;
+      return <><HostRoomControls />{room.currentQuestionIndex >= room.totalQuestions - 1
+        ? <PodiumReadyView />
+        : <ScoreboardView roomCode={activeRoomCode} />}</>;
     case 'FINAL':
       return <PodiumView roomCode={activeRoomCode} />;
     default:
