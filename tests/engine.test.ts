@@ -41,6 +41,43 @@ function setup(count = 2) {
   return {engine, host, join, command, submit, advance: (ms: number) => {time += ms; engine.tick();}};
 }
 
+for (const stage of ['REVEAL', 'SCOREBOARD'] as const) {
+  test(`podium: recovery from final ${stage} preserves scores, waits for host and rejects player commands`, () => {
+    const s = setup(3);
+    const player = s.join();
+    const other = s.join('BOB');
+    s.command('start');
+    for (let index = 0; index < 3; index++) {
+      s.submit(player, index);
+      s.advance(5201);
+      if (index < 2 || stage === 'SCOREBOARD') s.advance(4000);
+      if (index < 2) s.command('next');
+    }
+    const before = s.engine.view(s.host);
+    assert.equal(before.stage, stage);
+    assert.equal(before.players[player.playerId!].score, 6000);
+    let time = s.engine.serverTime();
+    const recovered = new GameEngine({ now: () => time });
+    recovered.restore(s.engine.snapshot());
+    const waiting = recovered.view(s.host);
+    assert.equal(waiting.stage, 'SCOREBOARD');
+    assert.equal(waiting.currentQuestionIndex, 2);
+    assert.deepEqual(waiting.rankings, before.rankings);
+    const request = { action: 'finish' as const, sessionId: s.host.sessionId, revision: waiting.revision };
+    assert.throws(() => recovered.command(player, request), /hanya untuk host/);
+    assert.equal(recovered.view(s.host).stage, 'SCOREBOARD');
+    recovered.leave(player); recovered.leave(other);
+    assert.deepEqual(recovered.view(s.host).rankings, before.rankings);
+    time += 60000; recovered.tick();
+    assert.equal(recovered.view(s.host).stage, 'SCOREBOARD');
+    const finish = { ...request, revision: recovered.view(s.host).revision };
+    recovered.command(s.host, finish);
+    assert.equal(recovered.view(s.host).stage, 'FINAL');
+    assert.throws(() => recovered.command(s.host, finish), /Status ruang berubah/);
+    assert.deepEqual(recovered.view(s.host).rankings, before.rankings);
+  });
+}
+
 test('revoked join history cannot permanently fill an otherwise empty lobby', () => {
   const s = setup();
   let lastId = '';
