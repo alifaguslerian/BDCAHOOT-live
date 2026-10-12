@@ -28,7 +28,7 @@ export function PlayerRevealView({
   question,
   questionIndex,
 }: PlayerRevealViewProps) {
-  const { getPlayerAnswer } = useGame();
+  const { room, getPlayerAnswer } = useGame();
   const answer = getPlayerAnswer(player.id, questionIndex);
 
   const isAnswered = Boolean(answer);
@@ -182,7 +182,7 @@ export function PlayerRevealView({
       {/* Footer Status */}
       <footer className="py-2 text-center text-xs font-space text-[#8B93A1] flex items-center justify-center gap-2">
         <span className="w-2 h-2 rounded-full bg-[#F5A623] animate-ping" />
-        <span>Menuju papan klasemen sementara...</span>
+        <span>{questionIndex >= room.totalQuestions - 1 ? 'Menuju pengumuman juara...' : 'Menuju papan klasemen sementara...'}</span>
       </footer>
     </div>
   );
