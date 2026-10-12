@@ -10,10 +10,8 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
-  Sparkles,
   Loader2,
   Crown,
-  Medal,
 } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 
@@ -26,13 +24,11 @@ export const ScoreboardView: React.FC<ScoreboardViewProps> = ({ roomCode }) => {
     room,
     rankings,
     nextQuestion,
-    finishQuiz,
     isHostActionLoading,
   } = useGame();
 
   const currentIdx = room.currentQuestionIndex;
   const totalQuestions = room.totalQuestions;
-  const isLastQuestion = currentIdx >= totalQuestions - 1;
 
   const reduceMotion = useReducedMotion();
   const [settledQuestion, setSettledQuestion] = useState<number | null>(null);
@@ -50,11 +46,7 @@ export const ScoreboardView: React.FC<ScoreboardViewProps> = ({ roomCode }) => {
   const handleNextAction = () => {
     if (isHostActionLoading) return;
     sound.playTap();
-    if (isLastQuestion) {
-      finishQuiz();
-    } else {
-      nextQuestion();
-    }
+    nextQuestion();
   };
 
   return (
@@ -91,12 +83,6 @@ export const ScoreboardView: React.FC<ScoreboardViewProps> = ({ roomCode }) => {
             <>
               <Loader2 className="w-5 h-5 animate-spin" />
               <span>Memproses...</span>
-            </>
-          ) : isLastQuestion ? (
-            <>
-              <Trophy className="w-5 h-5 fill-current" />
-              <span>LIHAT PODIUM JUARA</span>
-              <ArrowRight className="w-5 h-5" />
             </>
           ) : (
             <>
