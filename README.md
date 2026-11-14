@@ -1,13 +1,37 @@
+<div align="center">
+
 # BDCAHOOT Live
 
-Kuis multiplayer di jaringan lokal: Host buat room, pemain masuk dengan kode, soal, pembahasan, scoreboard setiap ronde, dan podium akhir.
+**A live quiz arena for the room you're in.**
 
-Untuk acara: [panduan operator dan backup](docs/OPERASIONAL.md),
-[checklist rehearsal HP/router](docs/REHEARSAL.md), dan [status progres](docs/ROADMAP.md).
+Create a quiz, share a room code, and let everyone play from their phone.
 
-## Menjalankan
+Next.js 15 · React 19 · TypeScript · Socket.io · SQLite · Tailwind CSS
 
-Gunakan Node.js 22.22.2+ (seri 22), 24.15.0+ (seri 24), atau 26+. Versi minimum ini juga memenuhi kebutuhan lingkungan DOM pengujian. Instal dan build sebelum acara saat Internet tersedia:
+[Quick start](#quick-start) · [How it plays](#how-it-plays) · [Screenshots](#screenshots) · [Testing](#testing) · [Operator guide](docs/OPERATIONS.md)
+
+</div>
+
+![BDCAHOOT Live home page with entry points for the host and players](docs/images/home.png)
+
+BDCAHOOT Live is a self-hosted multiplayer quiz app for events, classrooms, and game nights on a local network. A laptop runs the server and host screen; participants join through a browser on the same Wi-Fi. The operator controls the pace between questions and decides when to reveal the final podium.
+
+**First live event: 67 participants, 20 questions.** The project owner reported a complete session with no observed errors or freezes. Automated load tests are documented separately below.
+
+## What you can do
+
+- Create and edit quizzes with four answer options, per-question timers, and automatic saving to a local SQLite database.
+- Invite players with a six-character room code. Players choose a nickname and one of 12 robot avatars.
+- Start with a synchronized five-second countdown, then collect answers against a server-controlled deadline.
+- Reveal the correct answer, show animated rankings between rounds, and advance when the operator is ready.
+- Keep the final scoreboard off-screen until the operator opens the podium, which reveals third, second, then first place.
+- Recover browser sessions after refresh or reconnect, without duplicating accepted answers or points.
+
+Fonts and avatars are served locally. After installation and the production build, gameplay does not need an internet connection. The application interface is currently in Indonesian; this README is in English.
+
+## Quick start
+
+Use **Node.js 22.22.2+ within v22, 24.15.0+ within v24, or v26+**, and npm. Run these commands from the project folder:
 
 ```sh
 npm ci
@@ -15,217 +39,109 @@ npm run build
 npm start
 ```
 
-Terminal menampilkan URL lokal, alamat LAN, dan kode operator. Host membuka URL lokal, memasukkan kode operator untuk membuka koleksi kuis, memilih kuis lalu membuat room. Pemain membuka alamat LAN yang tercetak (contoh http://192.168.1.10:3000/player/join) dari Wi-Fi yang sama. Bagikan kode room, bukan kode operator.
+The server prints its local URL, LAN URL, operator key, and database path. SQLite initializes automatically; no separate database server or SQL setup is needed.
 
-Setelah pemain masuk, Host menekan Mulai Game. Host dan pemain melihat countdown server 5–4–3–2–1 sebelum soal pertama dikirim; timer menjawab baru dimulai setelah countdown. Refresh browser mengikuti sisa countdown, sedangkan restart server saat countdown mengulang persiapan 5 detik. Server menutup jawaban setelah deadline + toleransi 200 ms. Pembahasan 3-5 detik dilanjutkan scoreboard. Host melanjutkan soal berikutnya atau menampilkan podium setelah soal terakhir.
+| Who | Where to go | What to do |
+| --- | --- | --- |
+| Operator | `http://localhost:3000/host/library` on the server laptop | Enter the operator key from the terminal, create a quiz, then choose **Mulai Room**. |
+| Players | The printed LAN URL followed by `/player/join` | Enter the room code once, choose a name and avatar, then join the lobby. |
+| Operator | The room screen | Wait for the participants, then press **Mulai Game**. |
 
-Pengembangan: `npm run dev`. `PORT` mengubah port; `HOST_KEY` menetapkan kode operator minimal 12 karakter. Tanpa HOST_KEY, server membuat kode acak saat startup. Gunakan `.env.local` untuk konfigurasi (lihat `.env.example`). Gunakan build produksi saat acara.
+For example, if the terminal prints `http://192.168.1.10:3000`, players open `http://192.168.1.10:3000/player/join`. Their devices must be able to reach the server laptop on the network; `localhost` on a phone refers to the phone itself.
 
-## Batas operasional
+**Share the room code with players. Keep the operator key private.** Use `npm start`, which runs the combined Next.js and Socket.io server. For development, use `npm run dev`.
 
-- Server menyimpan pertandingan ke SQLite lokal (`data/game.sqlite`, dapat diubah lewat `DATABASE_PATH`). Satu proses server per database. Jangan menutup terminal atau membiarkan laptop tidur saat pertandingan; restart akan mengakhiri soal yang sedang aktif dan memulihkannya ke scoreboard.
-- Sesi aktif dipisahkan per tab melalui sessionStorage. Token pemain terakhir juga dicadangkan di localStorage agar tab baru pada profil/origin yang sama dapat memulihkan pemain dan receipt server. Sesi Host dicadangkan per kode room di localStorage; URL room yang sama dapat memulihkannya jika sessionStorage hilang. Menghapus site data atau berganti browser/origin dapat menghilangkan identitas.
-- Batas: 150 pemain/room, 200 soal/kuis, payload kuis maksimal 200 KiB, 16 room aktif. Room kedaluwarsa setelah enam jam tanpa aktivitas terautentikasi.
-- Firewall perlu mengizinkan port server di jaringan privat. Wi-Fi guest dengan client isolation dapat menghalangi akses ke laptop.
-- HTTP lokal ditujukan untuk LAN tepercaya. Tidak melindungi token dari penyadap jaringan; gunakan TLS untuk jaringan tidak tepercaya. Jangan expose langsung ke Internet.
-- Gameplay dan font tidak bergantung Internet. Font WOFF2 dimuat dari server LAN, dengan fallback font sistem.
-- Ranking: skor, total durasi jawaban server, lalu urutan bergabung. Latensi Wi-Fi ikut memengaruhi waktu penerimaan; nol delay tidak dijanjikan.
+If a local environment file sets `NODE_ENV=development`, remove that override or set it to `production` before building and running an event. See the [configuration and operator guide](docs/OPERATIONS.md) for environment variables, backups, and recovery.
 
-## Pemulihan pertandingan (9A)
+## How it plays
 
-ACK sukses untuk perubahan permainan baru dikirim setelah transaksi SQLite selesai.
-Penulisan berjalan di worker dan perubahan yang berdekatan dapat digabung dalam satu
-snapshot. Server menyimpan room, urutan soal, token Host/pemain, jawaban, receipt retry,
-skor, urutan bergabung, dan penghapusan room. Snapshot tidak dikirim ke browser.
+| Step | On screen | Who advances it? |
+| --- | --- | --- |
+| 1 | Room code and player lobby | Operator starts the game. |
+| 2 | **5 → 4 → 3 → 2 → 1** | The server opens the first question. |
+| 3 | Question, answer buttons, and timer | The server closes the round after the deadline and 200 ms grace period; the host can also reveal early. |
+| 4 | Correct answer and a short preview countdown | Automatically continues after 3–5 seconds. |
+| 5 | Scoreboard between questions | Operator presses **Lanjut** for the next question. |
+| 6 | After the last preview: **Lihat Podium Juara** | Operator chooses when to open the podium. There is no final scoreboard on this waiting screen. |
+| 7 | Third → second → first place | Five seconds between podium reveals; reduced-motion settings show all places immediately. |
 
-Pembukaan soal disimpan dahulu sebagai QUESTION yang belum memiliki waktu mulai.
-Setelah commit selesai, server mengaktifkan jam soal sebelum mengirimnya ke pemain;
-waktu menunggu commit pembukaan tidak memakan durasi menjawab. Clock aktif ikut snapshot
-berikutnya. Bila server crash sebelum snapshot berikutnya, intent QUESTION tersimpan
-tetap dipulihkan ke scoreboard, bukan membuka ulang soal. Latensi pengiriman LAN tetap ada.
+Scores use server-measured response time. Ties resolve by total points, then total response time, then join order. Retrying an accepted answer returns its existing receipt instead of awarding points again. Network latency still affects when the server receives an answer.
 
-Setelah restart dengan database yang sama:
+## Screenshots
 
-- LOBBY, SCOREBOARD dan FINAL kembali ke tahap tersimpan.
-- QUESTION/REVEAL dipulihkan ke SCOREBOARD soal tersebut. Jawaban tersimpan tetap
-  dihitung, pemain yang belum menjawab tidak mendapat poin, dan penalti waktu untuk
-  tie-break diterapkan satu kali. Host melanjutkan ke soal berikutnya secara manual.
-- Host kembali memakai URL, origin dan tab yang sama, dengan sessionStorage
-  masih ada. Pemain dapat memakai cadangan lokal pada profil/origin yang sama bila tab hilang.
-  Hanya pemain terakhir yang memiliki cadangan per origin; untuk banyak pemain pada satu
-  perangkat, gunakan profil browser terpisah. Token/kode room tetap berlaku untuk room yang belum kedaluwarsa. Database
-  tidak mengembalikan token browser yang sudah dihapus. HOST_KEY yang tetap memudahkan
-  retry pembuatan room setelah restart; token Host room lama tidak bergantung key baru.
-- Room tanpa aktivitas tetap kedaluwarsa setelah enam jam. Aktivitas terakhir disimpan
-  secara periodik (sekitar 30 detik di luar waktu penulisan), juga ketika ada perubahan game
-  dan saat shutdown normal.
+These are actual captures from a local production build using a temporary demo quiz and fictional participants. They are not photographs of the live event. The room shown is not an active public room.
 
-Jika disk gagal ditulis atau commit tidak selesai dalam 5 detik, server memutus koneksi permainan, menolak koneksi baru dan
-menampilkan error di terminal. Perbaiki penyimpanan lalu restart; jangan menghapus
-database untuk menghilangkan error. Database rusak atau versi tidak didukung membuat
-startup gagal tanpa menggantinya dengan pertandingan kosong.
+**Host screen** · The shared question, timer, and answer count.
 
-Request yang menunggu dibatasi 8 per koneksi dan 1.000 seluruh server. Kelebihannya
-ditolak sementara dengan RATE_LIMIT sebelum mengubah game. Timeout bukan bukti bahwa
-write dibatalkan: commit yang terlambat mungkin sudah tersimpan. Setelah restart,
-gunakan sesi dan receipt server sebagai sumber status jawaban. Jika disk/worker benar-benar
-hang sehingga shutdown tidak selesai, operator perlu menghentikan proses lalu memeriksa disk.
+![Host arena showing a multiple-choice question and countdown](docs/images/host-question.png)
 
-Gunakan disk lokal yang andal, bukan folder jaringan/cloud-sync. Lindungi folder data
-dengan izin akun operator (terutama ACL Windows); database menyimpan rahasia sesi dan
-kunci jawaban dalam bentuk tidak terenkripsi. Jangan taruh di `public`, commit,
-unggah, atau bagikan kepada pemain. Untuk backup sederhana, hentikan server normal
-lalu salin database; simpan backup aman sebelum upgrade aplikasi/Node. Recovery sudah
-diuji terhadap process kill setelah ACK, bukan terhadap pencabutan listrik atau disk
-rusak secara fisik. Durabilitas tetap bergantung filesystem/perangkat menghormati sync.
+<details>
+<summary><strong>Player screen</strong> · View the phone layout</summary>
 
-## Verifikasi
+<p align="center">
+  <img src="docs/images/player-question.png" width="260" alt="Player phone screen with a question, countdown, and four large answer buttons">
+</p>
+
+Players answer on their own device. The server confirms accepted submissions, and the player can leave the room through the on-screen control.
+
+</details>
+
+## Built for a local event
+
+| Part | Responsibility |
+| --- | --- |
+| Next.js + React | Host console, quiz editor, player screens, and responsive layouts. |
+| Socket.io + Node.js | Live room state, authenticated host actions, answer receipts, and reconnects on the same port as the web app. |
+| Game engine | Authoritative deadlines, scoring, deterministic rankings, and stage transitions. |
+| SQLite worker | Saved quizzes and match snapshots; successful mutation ACKs wait for persistence. |
+| Tailwind CSS + Motion | Styling, ranking transitions, and podium animations. |
+
+Quiz content lives in **`data/game.sqlite`** by default. Changing Wi-Fi or the server's IP address does not erase saved quizzes when you use the same database. Browser session recovery is separate and depends on the browser profile and origin.
+
+The intended event size is **50–100+ players**. Configured limits are 150 players per room, 200 questions per quiz, 200 KiB per quiz payload, 500 saved quizzes, and 16 active rooms. These are application limits, not a promise of Wi-Fi capacity.
+
+Keep the server laptop awake and the terminal running during a game. Use a trusted LAN, allow the server through the private-network firewall, and check that guest/client isolation does not block participants. Rooms expire after six hours without authenticated activity; merely leaving a tab open is not an unlimited keep-alive.
+
+HTTP is the current LAN setup. It does not encrypt session tokens in transit. Do not expose this server directly to the internet or share the database, which contains answer keys and session secrets. See [Security boundaries](SECURITY.md).
+
+## Testing
 
 ```sh
 npm test
 npm run typecheck
 npm run lint
 npm run build
-npm audit
 ```
 
-Tes mengimpor engine produksi dan menjalankan Socket.io sungguhan: 100 koneksi x 40 soal, retry, reconnect, isolasi sesi dan skor yang dihitung independen. Clock soal dipercepat dalam tes; ACK diukur memakai waktu nyata. Hasil loopback bukan pengganti rehearsal dengan perangkat/access point lokasi acara.
+| Evidence | Scope |
+| --- | --- |
+| First event: 67 participants × 20 questions | Owner-reported real-world session; no observed errors or freezes. |
+| 63 regression tests passed in the 11 October 2026 audit | Engine, transport, persistence, recovery, and podium fault cases. This is a dated result, not a live CI badge. |
+| 100 Socket.io clients × 40 questions | Real socket connections and 4,000 submissions with accelerated question time on localhost. |
+| 80 participants × 40 questions in a recorded endurance pass | 70 socket bots + 10 full browser players, production server, SQLite, and real question timers on one machine. |
 
-### Endurance dengan jam nyata (8C)
+Local simulations do not reproduce dozens of physical phones, Wi-Fi interference, or every browser background behavior. The [testing guide](docs/TESTING.md) includes repeatable commands, measurement limits, and links to audit reports that also record failed attempts.
 
-```sh
-npm run test:endurance
-npm run test:endurance -- --players=100 --questions=40 --seconds=15 --report=reports/endurance-15s.json
+## Project map
+
+```text
+app/            Next.js routes and local fonts
+components/     Host, player, and shared interface components
+context/        Client connection and session recovery
+server/         Game engine, Socket.io server, SQLite worker
+lib/            Scoring, validation, quiz storage, and audio
+types/          Game and network contracts
+tests/          Automated regression tests
+scripts/        Browser checks and endurance harnesses
+public/avatars/ Locally served robot illustrations
+docs/           Operations, testing notes, and screenshots
 ```
 
-Default: 100 pemain plus satu Host, 40 soal, 5 detik menjawab, 4 detik pembahasan,
-dan 1 detik scoreboard; sekitar 7 menit tanpa percepatan jam. Contoh kedua memakai
-15 detik menjawab dan berlangsung sekitar 14 menit. Jalankan tanpa build atau tes
-lain bersamaan untuk mengurangi gangguan pada pengukuran.
+## Documentation
 
-Script membuka server Socket.io/engine produksi pada port loopback acak dalam proses
-Node terpisah dari pembangkit pemain. Tidak perlu menyalakan aplikasi terlebih dahulu.
-Setiap soal mengirim satu burst jawaban serentak, menunggu scoreboard diterima semua
-pemain, lalu memeriksa riwayat jawaban dan skor final. Setelah reset, jumlah room dan
-socket harus nol. Error, timeout, disconnect tak terduga, atau skor tidak konsisten
-menghasilkan exit code nonzero; kegagalan saat run juga dicatat dalam laporan.
+- [Operator guide](docs/OPERATIONS.md): startup, saved quizzes, backups, and what to do after a disconnect or restart.
+- [Testing guide](docs/TESTING.md): browser checks, endurance commands, and how to interpret the results.
+- [Podium audit](docs/podium-audit-2026-10-11.md): final-question flow, lost ACK handling, and known disclosure limits.
+- [Verification history](docs/verification.md): dated implementation and test records; newer entries supersede earlier behavior.
 
-`reports/endurance.json` menyimpan sampel CPU, RSS, heap, external memory, event-loop
-delay per detik serta persentil ACK. Folder reports diabaikan Git. CPU memakai skala
-100% = satu core penuh, bukan persentase seluruh mesin. P99 event loop pada ringkasan
-adalah nilai tertinggi di antara jendela sampel, bukan p99 gabungan. Resolusi monitor
-event loop 10 ms. RSS/heap adalah nilai yang tersampel, sehingga lonjakan singkat dapat
-terlewat. Tidak ada forced GC; heap yang tidak langsung turun setelah reset sendiri
-bukan bukti kebocoran. Status `passed` berarti alur dan konsistensi lolos, bukan lolos
-ambang performa universal.
-
-Run ini tidak menjalankan Next.js/rendering browser, tidak mengukur UI freezing,
-dan tidak merepresentasikan 100 HP atau router lokasi. Proses terpisah masih berbagi
-CPU mesin yang sama. Profil UI dan rehearsal perangkat nyata tetap wajib.
-
-Profil UI produksi dan pengulangan siklus room:
-
-```sh
-python -m pip install --target reports/python playwright==1.63.0
-npm run build
-npm run test:endurance -- --browser --players=100 --questions=40 --seconds=15 --report=reports/endurance-ui-100x40.json
-npm run test:endurance -- --players=100 --questions=2 --rounds=5 --report=reports/endurance-lifecycle.json
-npm run test:endurance -- --players=100 --questions=40 --database=reports/durable-test.sqlite --report=reports/durable-test.json
-```
-
-Mode browser membutuhkan Python dan Google Chrome terpasang. Script Python memakai
-Playwright dari `reports/python`; tidak ada dependensi browser testing dalam bundle
-aplikasi. Server menjalankan Next.js produksi bersama Socket.io. Dari 100 pemain,
-99 adalah bot dan satu pemain memakai halaman browser 390×844; Host memakai halaman
-1440×900. Satu socket Host tambahan mengamati state untuk pemeriksaan konsistensi.
-Browser Host benar-benar menekan Start/Lanjut/Podium, dan pemain browser mengklik
-jawaban pada semua soal. Viewport kecil bukan emulasi kemampuan perangkat fisik.
-
-CPU renderer pemain diperlambat 4×; ubah melalui variabel lingkungan
-`ENDURANCE_CPU_RATE` bila diperlukan. Timer/rendering background browser dinonaktifkan
-throttling-nya agar kedua halaman tetap dirender. Ini menguji beban UI aktif, bukan
-suspensi aplikasi di HP. Laporan `.browser.json` mencatat long tasks, jeda frame,
-Event Timing, heap/DOM/listener pada scoreboard, error JavaScript, overflow horizontal,
-dan waktu aksi Playwright sampai teks konfirmasi tampil. Waktu aksi ini mencakup
-driver/polling, bukan INP atau latensi jaringan murni. GC dipaksa hanya pada browser
-setelah semua pengukuran pertandingan untuk diagnostik objek yang masih tertahan;
-tidak ada forced GC server atau saat pertandingan. Screenshot adalah bukti tambahan,
-bukan pengganti metrik. Mode `--rounds` membuat/menutup beberapa room dalam proses
-server yang sama dan mencatat kondisi setelah setiap cleanup.
-Tambahkan `--database` untuk memasukkan biaya persistence seperti server normal.
-Tanpa opsi ini, harness memakai memori saja. Gunakan database pengujian terpisah;
-jangan arahkan benchmark ke database pertandingan acara.
-
-Untuk beberapa pemain browser penuh, gunakan `--browser-players`:
-
-```sh
-npm run test:endurance -- --players=80 --browser-players=10 --questions=40 --seconds=5 --database=reports/browser-fleet.sqlite --report=reports/browser-fleet.json
-python scripts/check-player-layout.py reports/player-layout.json
-python scripts/check-network-recovery.py
-```
-
-Contoh fleet menjalankan 10 pemain browser dengan storage terpisah, 70 bot Socket.IO,
-dan UI Host. Jumlah browser dapat dinaikkan sampai jumlah pemain, tetapi kebutuhan RAM
-pembangkit beban juga meningkat; mulai kecil pada laptop yang sama dengan server.
-Mode fleet tidak memakai CPU throttling 4× atau forced GC. Halaman dimuat bersamaan,
-join melalui UI dilakukan per batch 10, dan timer pertandingan berjalan nyata.
-Laporan browser mencatat ACK yang diamati melalui CDP, klik-ke-konfirmasi UI, selisih
-penerimaan soal, error, disconnect, dan sampel heap/DOM pada dua browser. Angka CDP
-mencakup penjadwalan alat penguji, bukan waktu jaringan murni. Laporan server mencatat
-CPU, RAM, RAM sistem yang tersedia, waktu snapshot/penyimpanan/penantian ACK, dan
-alasan penutupan socket. Pengukuran server memakai counter berukuran tetap dan tidak
-mengirim diagnostik ke pemain.
-
-Tes layout memakai port 3137; tes recovery memakai port 3133. Keduanya membuat
-database sementara sendiri. Tidak satu pun tes ini mewakili kapasitas Wi-Fi 80 HP.
-
-## Struktur
-
-- server/gameEngine.ts: validasi, state machine, deadline monoton, scoring, proyeksi data.
-- server/socketServer.ts: identitas koneksi, batas paket/request, ACK dan counter Host maksimal 10 Hz.
-- server/index.ts: Next.js dan Socket.io pada satu port.
-- context/GameContext.tsx: koneksi klien, pemulihan sesi dan pending submission.
-- types/network.ts: kontrak transport.
-- tests/: pengujian kode produksi.
-
-Koleksi kuis dan draft editor disimpan di tabel `quizzes` dalam SQLite server (`data/game.sqlite`, mengikuti `DATABASE_PATH`). Pindah Wi-Fi/IP atau browser tidak mengganti koleksi selama terhubung ke server dengan file database yang sama. Semua operasi koleksi membutuhkan kode operator; kunci jawaban tidak tersedia ke pemain melalui koleksi. Kode operator diingat di sessionStorage tab sampai ditutup. Jika server mengganti kode saat restart, buka ulang halaman dan masukkan kode baru.
-
-Saat membuka koleksi dari browser/alamat lama, aplikasi otomatis mengimpor kuis localStorage. Setelah seluruh impor dikonfirmasi server, data lama diarsipkan ke `bdcahoot_quiz_library_v1_backup`; kegagalan tetap mempertahankan data sumber. Impor tidak menimpa ID yang sudah ada di server dan tidak menghidupkan kembali kuis yang dihapus. Browser tidak bisa membaca penyimpanan dari origin lain: buka alamat lama sekali untuk memindahkan kuis yang dibuat di sana. Simpan salinan backup browser bila ada konflik ID yang perlu dipulihkan manual.
-
-Editor menunggu konfirmasi database sebelum menampilkan status tersimpan. Autosave digabung selama 400 ms; tombol kembali/pengaturan menunggu penyimpanan selesai. Koneksi putus atau konflik edit dua tab menampilkan error, bukan status sukses. Tunggu “Tersimpan otomatis” sebelum menutup tab. Dua tab dengan versi berbeda tidak boleh saling menimpa; muat ulang tab lama sebelum melanjutkan. Batas koleksi 500 kuis aktif, 200 soal/kuis, 200 KiB/kuis. Draft boleh belum lengkap; validasi bermain tetap diterapkan saat membuat room. `/host/manage` mengarah ke editor koleksi yang sama agar tidak ada jalur draft sementara terpisah.
-
-Untuk backup kuis beserta pertandingan, hentikan server lalu salin file database ke lokasi cadangan. SQLite tetap lokal, bukan cloud: memindah server ke laptop lain membutuhkan file database tersebut. File ini juga mengandung token pertandingan; jangan bagikan ke pemain.
-
-Tes browser produksi: setelah `npm run build`, jalankan `python scripts/check-quiz-library.py` (Chrome + Playwright seperti tes endurance). Menggunakan database sementara; menguji edit, navigasi sebelum debounce, konflik dua tab, offline/retry, restart, origin berbeda, dan pembuatan room. Laporan tersimpan di `reports/quiz-library-browser.json`.
-
-BroadcastChannel, grid simulator dan tes yang menduplikasi logika produksi telah diganti.
-
-Database baru mulai dengan library kosong; materi kuis contoh dan kuncinya tidak lagi
-disisipkan ke bundle publik. Kuis localStorage Host dimigrasikan dengan cadangan seperti dijelaskan di atas.
-Jangan gunakan kuis contoh dari versi lama sebagai materi kompetisi rahasia, karena
-materi itu pernah tersedia publik. Buat soal sendiri sebelum acara.
-
-
-### Avatar pemain
-
-Pada langkah isi nama, pemain dapat memilih satu dari 12 ilustrasi robot Bottts (default Robot 1). Avatar muncul di lobby, hasil pemain, leaderboard host dan podium. Pilihan disimpan bersama pemain dalam snapshot pertandingan sehingga reconnect dan recovery mempertahankannya. Pemain dari snapshot lama memakai tampilan Robot 1.
-
-Aset SVG lokal berada di `public/avatars/` (sekitar 62 KiB total), tanpa permintaan internet saat bermain. Sumber/lisensi tercatat di `public/avatars/README.txt`. Server menerima ID avatar dari daftar tetap; URL atau upload gambar tidak diterima. Retry join memakai pilihan dari permintaan awal yang belum terkonfirmasi agar identitas tetap konsisten. Avatar tidak memengaruhi poin atau tie-breaker.
-
-
-### Pemulihan operator saat room masih aktif
-
-Refresh pada URL `/host/room/KODE` memulihkan sesi dari sessionStorage, atau cadangan Host khusus kode room pada browser/origin yang sama. Jika keduanya hilang atau operator pindah browser/alamat, buka URL room tersebut dan pilih **Pulihkan kendali room** memakai kode operator dari terminal server. Form yang sama tersedia di Library melalui **Pulihkan room yang masih aktif**. Library juga menyediakan tautan ke room Host yang masih tersambung.
-
-Pemulihan memerlukan kode operator yang valid; kode room saja tidak memberikan kendali. Pemulihan tidak membuat room baru, mereset timer, atau mengubah pemain/poin. Room yang ditutup atau kedaluwarsa tidak dapat dipulihkan. Tombol **Tutup room** tersedia juga selama soal/reveal/scoreboard, meminta konfirmasi, lalu mengakhiri sesi semua pemain. Penutupan menghapus cadangan sesi Host tersebut. Restart proses server tetap mengikuti aturan pemulihan pertandingan: soal aktif diakhiri ke scoreboard; berbeda dari refresh browser.
-
-Verifikasi 2026-10-04: 55 tes regresi, build dan lint lolos. Chrome produksi menguji refresh saat soal aktif, sessionStorage hilang, seluruh storage hilang, penolakan kode operator salah, pemulihan room, serta penutupan yang melepaskan pemain. Penyebab kehilangan sesi pada browser pengguna belum terkonfirmasi; refresh normal berhasil dalam pengujian.
-
-
-### Keluar room dari perangkat pemain
-
-Tombol **Keluar room** tersedia pada lobby, soal, pembahasan, leaderboard dan hasil akhir. Pada game aktif, pemain mengonfirmasi keluar; token aksesnya dicabut dan cadangan sesi perangkat dihapus setelah server mengonfirmasi. Refresh setelah keluar tidak memasukkan pemain kembali. Nilai/jawaban yang sudah tercatat tetap menjadi bagian hasil pertandingan, tetapi pemain ditandai tidak terhubung. Pemain tidak dapat bergabung ulang ke game yang telah dimulai. Keluar membutuhkan koneksi ke server agar pencabutan sesi terkonfirmasi.
-
-Refresh browser Host di URL room yang sama memulihkan room secara otomatis dan tidak mengulang pertanyaan atau timer. Pengujian Chrome mencakup refresh di lobby, soal aktif dan scoreboard serta tombol keluar pada setiap fase aktif sampai final. Verifikasi pembaruan: 56 tes regresi, build dan lint lolos.
-
-Podium host muncul dari bawah dengan urutan juara 3, 2, 1 dan jeda 5 detik antarjuara. Balok juara 1 paling tinggi dengan dasar sejajar. Jika peserta kurang dari tiga, urutan dimulai dari peringkat terakhir yang tersedia. Pengaturan reduced motion menampilkan seluruh podium langsung. Animasi tidak mengunci tombol operator atau mengubah poin.
+Robot illustrations are Bottts by Pablo Stanley, distributed via DiceBear; see [asset attribution](public/avatars/README.txt). Bundled fonts include their licenses: [Anybody](app/fonts/Anybody-OFL.txt) and [Space Grotesk](app/fonts/SpaceGrotesk-OFL.txt).
