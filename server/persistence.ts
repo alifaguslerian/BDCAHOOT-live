@@ -1,12 +1,14 @@
 import { Worker } from 'node:worker_threads';
 import { join, resolve } from 'node:path';
 import type { LibraryRequest, LibraryResult } from '../types/quizLibrary';
+import type { HistoryRequest, HistoryResponse, MatchResult } from '../types/matchHistory';
 
 export interface Persistence {
   initial: Buffer | null;
-  save(data: Buffer): Promise<void>;
+  save(data: Buffer, results?: MatchResult[]): Promise<void>;
   close(): Promise<void>;
   library?(request: LibraryRequest): Promise<LibraryResult>;
+  history?(request: HistoryRequest): Promise<HistoryResponse>;
 }
 
 export class SnapshotStore implements Persistence {
@@ -55,13 +57,26 @@ export class SnapshotStore implements Persistence {
       this.worker.postMessage({ id, library: request });
     });
   }
-  async save(data: Buffer): Promise<void> {
+  async history(request: HistoryRequest): Promise<HistoryResponse> {
+    if (this.failed) throw this.failed;
+    if (this.closed || this.closePromise) throw Error('Storage closed');
+    const id = ++this.sequence;
+    return new Promise<HistoryResponse>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(Error('Riwayat belum dapat dimuat. Coba lagi.'));
+      }, 5000);
+      this.pending.set(id, { resolve: data => { clearTimeout(timer); resolve(data as HistoryResponse); }, reject: error => { clearTimeout(timer); reject(error); } });
+      this.worker.postMessage({ id, history: request });
+    });
+  }
+  async save(data: Buffer, results: MatchResult[] = []): Promise<void> {
     if (this.failed) throw this.failed;
     if (this.closed || this.closePromise) throw Error('Storage closed');
     const id = ++this.sequence;
     await new Promise<void>((resolve, reject) => {
       this.pending.set(id, { resolve: () => resolve(), reject });
-      this.worker.postMessage({ id, data });
+      this.worker.postMessage({ id, data, results });
     });
   }
   close(): Promise<void> { return this.closePromise ??= this.closeOnce(); }

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Operator match history with separate immutable results for every completed match, stored automatically in SQLite before the final podium.
+- Full-ranking CSV downloads from the podium and history, plus paginated archive browsing. Room closure and quiz edits/deletion preserve past results.
+- Regression checks for history authorization, migration, atomic writes, replay/recovery, CSV escaping, and production browser downloads.
 - Comprehensive enterprise-grade project documentation:
   - `README.md`: High-level overview, ASCII network diagrams, mathematical speed bonus specification, and getting started guide.
   - `docs/ARCHITECTURE.md`: LAN-first topology, finite state machines (Host & Player), clock synchronization invariants, and fault recovery matrix.

@@ -26,6 +26,7 @@ BDCAHOOT Live is a self-hosted multiplayer quiz app for events, classrooms, and 
 - Reveal the correct answer, show animated rankings between rounds, and advance when the operator is ready.
 - Keep the final scoreboard off-screen until the operator opens the podium, which reveals third, second, then first place.
 - Recover browser sessions after refresh or reconnect, without duplicating accepted answers or points.
+- Browse completed matches in the operator's **Riwayat Pertandingan**, inspect every participant's ranking, and download CSV results from history or the final podium. Replaying a quiz creates a separate match record.
 
 Fonts and avatars are served locally. After installation and the production build, gameplay does not need an internet connection. The application interface is currently in Indonesian; this README is in English.
 
@@ -98,6 +99,8 @@ Players answer on their own device. The server confirms accepted submissions, an
 
 Quiz content lives in **`data/game.sqlite`** by default. Changing Wi-Fi or the server's IP address does not erase saved quizzes when you use the same database. Browser session recovery is separate and depends on the browser profile and origin.
 
+Completed results are archived in the same database when the last question closes, before the podium is opened. Closing the room or editing/deleting its quiz does not remove the archive. History applies to rooms created with this feature; cancelled or partially played matches are not archived. See the [results and upgrade notes](docs/OPERATIONS.md#match-history-and-csv-results).
+
 The intended event size is **50–100+ players**. Configured limits are 150 players per room, 200 questions per quiz, 200 KiB per quiz payload, 500 saved quizzes, and 16 active rooms. These are application limits, not a promise of Wi-Fi capacity.
 
 Keep the server laptop awake and the terminal running during a game. Use a trusted LAN, allow the server through the private-network firewall, and check that guest/client isolation does not block participants. Rooms expire after six hours without authenticated activity; merely leaving a tab open is not an unlimited keep-alive.
@@ -141,6 +144,7 @@ docs/           Operations, testing notes, and screenshots
 
 - [Operator guide](docs/OPERATIONS.md): startup, saved quizzes, backups, and what to do after a disconnect or restart.
 - [Testing guide](docs/TESTING.md): browser checks, endurance commands, and how to interpret the results.
+- [Match history verification](docs/match-history-verification-2026-11-16.md): archival, CSV, database migration, and regression evidence for the results feature.
 - [Podium audit](docs/podium-audit-2026-10-11.md): final-question flow, lost ACK handling, and known disclosure limits.
 - [Verification history](docs/verification.md): dated implementation and test records; newer entries supersede earlier behavior.
 

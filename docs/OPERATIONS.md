@@ -84,6 +84,41 @@ client retains a backup under `bdcahoot_quiz_library_v1_backup` once imports suc
 It cannot read a different origin's storage. Imports do not overwrite existing quiz
 IDs or resurrect deleted quizzes.
 
+## Match history and CSV results
+
+Open **Riwayat Pertandingan** from the operator library to browse completed games,
+newest first, with 20 matches per page. Open an entry for its quiz title, start/end
+times, participant count, question count, and every participant's final rank and
+score. Players who leave after the game starts remain in the results.
+
+The server archives a result when it closes the last question and fixes the final
+ranking. This does not wait for the operator to reveal the podium. **Download Hasil**
+appears on the podium after all places are revealed and is also available in the
+history detail. Both produce the same UTF-8 CSV, including correct, wrong, and
+unanswered counts. CSV times are labeled UTC; the history screen uses the browser's
+local time. A missing download or network error can be retried without changing scores.
+Response-time totals include the existing full-timer penalty for unanswered questions.
+
+Each server match ID has one immutable record. Reusing a quiz or room code creates
+a new match ID and a separate entry; refreshes, retries and restarts do not create
+duplicates. Closing/expiring a room or editing/deleting a quiz does not delete results.
+The archive is in the SQLite `match_results` table and is included in database backups.
+Only operator-authenticated requests can browse history; a room's host can download
+that room's own result with its existing host session. History contains no session
+tokens, answer keys, or per-question answer payloads.
+
+This version archives completed games from newly created rooms. Cancelled lobbies,
+early finishes before the last question, and legacy rooms restored from a previous
+version do not acquire history entries. If a restart closes an active final question,
+the archived result follows the existing recovery/scoring rules below. History is
+retained until the database is replaced or removed; there is no archive-deletion UI.
+
+On first startup, the server migrates SQLite schema version 1 to 2 automatically,
+preserving the existing quiz library and recovery snapshot. Before upgrading an
+event installation, stop the server and back up its database using the steps above.
+An older server cannot open version 2; a rollback requires the matching pre-upgrade
+backup. No manual SQL setup is required. Do not upgrade during an active event.
+
 ## Refresh, reconnect, and restart
 
 | Situation | Expected behavior |
@@ -129,6 +164,8 @@ Corrupt or unsupported databases fail startup rather than being silently replace
 If a worker/disk hang prevents shutdown, stop only the relevant server process and
 investigate the storage. Do not delete the database to clear an error.
 
-Record any results you need before closing the room. Closing removes the match from
-the stored snapshot; the database is not a historical archive of every completed
-game. Stop the server normally, then take a private backup if needed.
+Closing removes the active match from the recovery snapshot. Completed matches from
+new rooms keep their independent history record; unfinished and legacy matches do
+not. Result insertion and the corresponding snapshot update commit in one SQLite
+transaction, so a failed write cannot falsely confirm a saved result. Stop the server
+normally, then take a private backup if needed.

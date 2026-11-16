@@ -12,12 +12,22 @@ try {
   db.exec('PRAGMA busy_timeout=0; PRAGMA locking_mode=EXCLUSIVE; PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL;');
   db.exec('BEGIN EXCLUSIVE');
   const version = db.prepare('PRAGMA user_version').get().user_version;
-  if (version !== 0 && version !== 1) throw Error('Unsupported database version');
-  db.exec('CREATE TABLE IF NOT EXISTS snapshot (id INTEGER PRIMARY KEY CHECK(id=1), data BLOB NOT NULL, digest TEXT NOT NULL); PRAGMA user_version=1; COMMIT;');
+  if (![0, 1, 2].includes(version)) throw Error('Unsupported database version');
+  db.exec('CREATE TABLE IF NOT EXISTS snapshot (id INTEGER PRIMARY KEY CHECK(id=1), data BLOB NOT NULL, digest TEXT NOT NULL);');
   db.exec('CREATE TABLE IF NOT EXISTS quizzes (id TEXT PRIMARY KEY, data TEXT, revision INTEGER NOT NULL);');
+  db.exec(`CREATE TABLE IF NOT EXISTS match_results (
+    id TEXT PRIMARY KEY, quiz_id TEXT, quiz_title TEXT NOT NULL, started_at REAL NOT NULL,
+    finished_at REAL NOT NULL, question_count INTEGER NOT NULL, participant_count INTEGER NOT NULL, data TEXT NOT NULL
+  ); CREATE INDEX IF NOT EXISTS match_results_finished ON match_results(finished_at DESC, id DESC);
+  PRAGMA user_version=2; COMMIT;`);
   if (db.prepare('PRAGMA quick_check').get().quick_check !== 'ok') throw Error('Database integrity failure');
   const row = db.prepare('SELECT data,digest FROM snapshot WHERE id=1').get();
   const writeSnapshot = db.prepare('INSERT INTO snapshot(id,data,digest) VALUES(1,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data,digest=excluded.digest');
+  const writeResult = db.prepare('INSERT INTO match_results(id,quiz_id,quiz_title,started_at,finished_at,question_count,participant_count,data) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING');
+  const getResult = db.prepare('SELECT data FROM match_results WHERE id=?');
+  const summaries = 'SELECT id, quiz_id AS quizId, quiz_title AS quizTitle, started_at AS startedAt, finished_at AS finishedAt, question_count AS questionCount, participant_count AS participantCount FROM match_results';
+  const firstResults = db.prepare(`${summaries} ORDER BY finished_at DESC, id DESC LIMIT ?`);
+  const olderResults = db.prepare(`${summaries} WHERE (finished_at,id) < (?,?) ORDER BY finished_at DESC, id DESC LIMIT ?`);
   const digest = data => createHash('sha256').update(data).digest('hex');
   if (row && digest(row.data) !== row.digest) throw Error('Snapshot checksum failure');
   parentPort.postMessage({ id: 0, data: row?.data ?? null });
@@ -42,7 +52,7 @@ try {
     db.prepare('INSERT INTO quizzes(id,data,revision) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data,revision=excluded.revision').run(key, JSON.stringify(quiz), quiz.updatedAt);
     return quiz;
   }
-  parentPort.on('message', ({ id, data, close, library: request }) => {
+  parentPort.on('message', ({ id, data, close, library: request, history, results = [] }) => {
     try {
       if (close) {
         db.close(); parentPort.postMessage({ id }); parentPort.close(); return;
@@ -52,8 +62,24 @@ try {
         parentPort.postMessage({ id, data: result });
         return;
       }
+      if (history) {
+        let result;
+        if (history.action === 'get') {
+          const row = getResult.get(history.id);
+          result = row ? JSON.parse(row.data) : null;
+        } else if (history.action === 'list') {
+          const limit = Math.max(1, Math.min(50, history.limit ?? 20));
+          const rows = history.before ? olderResults.all(history.before.finishedAt, history.before.id, limit + 1) : firstResults.all(limit + 1);
+          const items = rows.slice(0, limit), last = items.at(-1);
+          result = { items, nextCursor: rows.length > limit ? { finishedAt: last.finishedAt, id: last.id } : null };
+        } else throw Object.assign(Error('Permintaan riwayat tidak valid.'), { expected: true });
+        parentPort.postMessage({ id, data: result });
+        return;
+      }
       db.exec('BEGIN IMMEDIATE');
       try {
+        for (const result of results) writeResult.run(result.id, result.quizId, result.quizTitle, result.startedAt,
+          result.finishedAt, result.questionCount, result.participantCount, JSON.stringify(result));
         writeSnapshot.run(data, digest(data));
         db.exec('COMMIT');
       } catch (error) { db.exec('ROLLBACK'); throw error; }

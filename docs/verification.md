@@ -1,5 +1,9 @@
 # Verification — 29 September 2026
 
+Pembaruan 16 November 2026: [riwayat pertandingan dan download CSV](match-history-verification-2026-11-16.md).
+Suite regresi **73/73 lulus**; laporan mencatat migrasi SQLite, arsip atomik,
+pengujian browser, dan hasil endurance pembaruan ini.
+
 Audit lanjutan 11 Oktober 2026: lihat [audit podium](podium-audit-2026-10-11.md).
 Satu bug pesan gagal akibat ACK finish hilang diperbaiki. Suite kini **63/63
 lulus**, disertai tes Chrome untuk ACK/perintah hilang, klik berulang, offline,

@@ -15,6 +15,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
+import { DownloadMatchButton } from '@/components/host/DownloadMatchButton';
 
 interface PodiumViewProps {
   roomCode: string;
@@ -22,7 +23,7 @@ interface PodiumViewProps {
 
 export const PodiumView: React.FC<PodiumViewProps> = ({ roomCode }) => {
   const router = useRouter();
-  const { room, rankings, resetRoom } = useGame();
+  const { room, rankings, resetRoom, loadCurrentMatchResult } = useGame();
 
   const totalPlayers = rankings.length;
   const first = rankings[0] ?? null;
@@ -111,6 +112,10 @@ export const PodiumView: React.FC<PodiumViewProps> = ({ roomCode }) => {
 
       {/* Main Podium Presentation */}
       <main className="flex-1 flex flex-col items-center justify-center p-6 max-w-5xl mx-auto w-full">
+        {room.completedMatchId && visibleCount === podiumSize && <div className="mb-6 flex flex-col items-center gap-2">
+          <DownloadMatchButton loadResult={loadCurrentMatchResult} />
+          <p className="text-center text-xs text-[#8B93A1]">Hasil tersimpan di Riwayat Pertandingan. CSV memuat seluruh peserta.</p>
+        </div>}
         {totalPlayers === 0 ? (
           <div className="text-center py-20 p-8 border border-dashed border-[#232C3E] rounded-3xl bg-[#0E121B]/40 max-w-md w-full">
             <Trophy className="w-12 h-12 text-[#8B93A1] mx-auto mb-3 opacity-50" />

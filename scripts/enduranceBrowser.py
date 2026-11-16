@@ -78,7 +78,10 @@ def main():
                     expect(player.get_by_text('Jawaban Tersimpan', exact=True)).to_be_visible()
                     clicks.append((time.perf_counter() - before) * 1000)
                     expect(host.locator('#btn-scoreboard-continue')).to_be_visible(timeout=(config['seconds'] + 15) * 1000)
-                    expect(player.get_by_text('Klasemen', exact=False).first).to_be_visible()
+                    if q == config['questions'] - 1:
+                        expect(player.get_by_role('heading', name='Menunggu podium juara', exact=True)).to_be_visible()
+                    else:
+                        expect(player.get_by_text('Total Akumulasi Poin', exact=True)).to_be_visible()
                     for role, page in pages.items():
                         metrics = {item['name']: item['value'] for item in sessions[role].send('Performance.getMetrics')['metrics']}
                         measurements.append({"question": q + 1, "role": role, "heapBytes": metrics['JSHeapUsedSize'],

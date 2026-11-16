@@ -9,6 +9,7 @@ import { parseArgs } from 'node:util';
 import { createInterface } from 'node:readline';
 import { io, type Socket } from 'socket.io-client';
 import type { Reply, RoomView, SessionCredentials } from '../types/network';
+import type { MatchResult } from '../types/matchHistory';
 import type { Sample } from './enduranceServer';
 
 async function main() {
@@ -43,6 +44,7 @@ async function main() {
   let browserProcess: ReturnType<typeof spawn> | undefined;
   let browserReport: unknown;
   const cleanups: Sample[] = [];
+  const archivedMatches: string[] = [];
   worker.on('error', error => { failure = error; });
   worker.on('exit', (code, signal) => {
     workerExited = true; workerExitCode = code;
@@ -150,18 +152,21 @@ async function main() {
       }
       await until(() => clients.every(c => c.view?.stage === 'FINAL'), 'final podium');
       assert.equal(host.view!.rankings.length, playersCount);
+      const expectedCounts = new Map<string, { correct: number; wrong: number }>();
       for (const [i, { client, identity }] of players.entries()) {
         const player = client.view!.players[identity.playerId!];
         assert.equal(Object.keys(player.answers).length, questions);
-        let score = 0;
+        let score = 0, correctCount = 0;
         for (let q = 0; q < questions; q++) {
           const answer = player.answers[q], correct = (i + q) % 4 !== 0;
           assert.equal(answer.isCorrect, correct);
+          if (correct) correctCount++;
           const expected = correct ? 1000 + Math.max(1, Math.round(1000 * Math.exp(-4 * answer.responseDurationMs / (seconds * 1000)))) : 0;
           assert.equal(answer.pointsEarned, expected); score += expected;
         }
         assert.equal(player.score, score);
         assert.equal(host.view!.players[identity.playerId!].score, score);
+        expectedCounts.set(identity.playerId!, { correct: correctCount, wrong: questions - correctCount });
       }
       if (values.browser) {
         await until(() => browserDone, 'browser final verification', 30000);
@@ -177,13 +182,36 @@ async function main() {
             assert.equal(answer.pointsEarned, expected); total += expected;
           }
           assert.equal(player.score, total);
+          expectedCounts.set(identity.playerId!, { correct: questions, wrong: 0 });
         }
         // Restore host binding after reading private player receipts.
         await request(host.socket, 'session:resume', owner);
       }
       assert.equal(latencies.length, (playersCount - browserPlayers) * questions * (round + 1));
+      let archived: MatchResult | undefined;
+      if (values.database) {
+        const finalView = await request<RoomView>(host.socket, 'session:resume', owner);
+        archived = await request<MatchResult>(host.socket, 'match:result', {});
+        assert.equal(archived.id, owner.sessionId);
+        assert.equal(archived.questionCount, questions);
+        assert.equal(archived.participantCount, playersCount);
+        assert.deepEqual(archived.rankings.map(p => [p.playerId, p.rank, p.score, p.totalResponseTimeMs]),
+          finalView.rankings.map(p => [p.playerId, p.rank, p.score, p.totalResponseTimeMs]));
+        for (const row of archived.rankings) {
+          const expected = expectedCounts.get(row.playerId);
+          assert(expected, 'archived participant must belong to this test match');
+          assert.equal(row.correct, expected.correct);
+          assert.equal(row.wrong, expected.wrong);
+          assert.equal(row.unanswered, 0);
+        }
+      }
       phase('cleanup');
       await command('reset');
+      if (archived) {
+        const retained = await request<MatchResult>(host.socket, 'history:request', { action: 'get', id: owner.sessionId, hostKey });
+        assert.deepEqual(retained, archived);
+        archivedMatches.push(archived.id);
+      }
       stopping = true;
       clients.forEach(c => c.socket.disconnect());
       await delay(5000);
@@ -220,7 +248,7 @@ async function main() {
       config: { players: playersCount, questions, rounds, browser: values.browser, browserPlayers, persistence: Boolean(values.database), questionSeconds: seconds, revealMs: 4000, scoreboardMs: values.browser ? 2000 : 1000 },
       environment: { node: process.version, platform: platform(), release: release(), cpu: cpus()[0]?.model, logicalCpus: cpus().length, totalMemoryBytes: totalmem(), serverPid: pid, workerExitCode },
       scope: values.browser ? `Production Next.js + Socket.io; ${playersCount - browserPlayers} bots plus ${browserPlayers} Chromium players and Chromium Host; real clock; loopback; no physical phones; server in a separate process; no server forced GC.` : 'Production Socket.io + game engine, real clock, isolated server process; loopback, no browser or physical phones; no forced GC.',
-      completedQuestions, botAnswers: latencies.length,
+      completedQuestions, botAnswers: latencies.length, archivedMatches,
       acceptedAnswers: latencies.length + (browserReport ? questions * browserPlayers : 0), unexpectedDisconnects: disconnected,
       browserReport, cleanups, socketCloses,
       ackMs: { p50: percentile(.5), p95: percentile(.95), p99: percentile(.99), max: sorted.at(-1) ?? null }, phases, samples };

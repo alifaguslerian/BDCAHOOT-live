@@ -1,6 +1,7 @@
 import type { GameRoomSettings, GameStage, Player, ScoreboardRankItem, OptionDistribution } from './game';
 import type { Quiz, QuizQuestion, OptionId } from './quiz';
 import type { LibraryRequest, LibraryResult } from './quizLibrary';
+import type { HistoryRequest, HistoryResponse, MatchResult } from './matchHistory';
 
 export type PublicQuestion = Omit<QuizQuestion, 'correctOption'> & { correctOption?: OptionId };
 export interface RoomView {
@@ -22,6 +23,7 @@ export interface RoomView {
   distribution: OptionDistribution;
   answeredCount: number;
   ownReceipt?: AnswerReceipt | null;
+  completedMatchId?: string;
 }
 export interface SessionCredentials { code: string; sessionId: string; token: string; role: 'host' | 'player'; playerId?: string }
 export interface AnswerReceipt { sessionId: string; questionIndex: number; submissionId: string; selectedOption: OptionId }
@@ -31,6 +33,8 @@ export interface HostCommand { sessionId: string; revision: number; action: 'sta
 export interface ClientEvents {
   'host:recover': (payload: { code: string; hostKey: string }, ack: (reply: Reply<SessionCredentials>) => void) => void;
   'library:request': (payload: LibraryRequest & { hostKey: string }, ack: (reply: Reply<LibraryResult>) => void) => void;
+  'history:request': (payload: HistoryRequest & { hostKey: string }, ack: (reply: Reply<HistoryResponse>) => void) => void;
+  'match:result': (payload: Record<string, never>, ack: (reply: Reply<MatchResult | null>) => void) => void;
   'room:leave': (payload: Record<string, never>, ack: (reply: Reply) => void) => void;
   'room:create': (payload: { quiz: Quiz; settings?: Partial<GameRoomSettings>; hostKey: string; requestId: string }, ack: (reply: Reply<SessionCredentials>) => void) => void;
   'room:inspect': (payload: { code: string }, ack: (reply: Reply<{ code: string; stage: GameStage }>) => void) => void;

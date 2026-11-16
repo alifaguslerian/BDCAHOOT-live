@@ -5,6 +5,8 @@ import { GameEngine } from './gameEngine';
 import { serialize, deserialize } from 'node:v8';
 import type { Persistence } from './persistence';
 import { parseLibraryRequest } from './quizLibrary';
+import { parseHistoryRequest } from './matchHistory';
+import type { MatchResult } from '../types/matchHistory';
 import type { ClientEvents, ServerEvents, SessionCredentials, Reply } from '../types/network';
 
 interface ConnectionData { credentials?: SessionCredentials; tokens: number; refillAt: number; pending: number; needsState?: boolean }
@@ -50,9 +52,12 @@ export function createSocketServer(http: HttpServer, options: Options) {
   });
   const dirtyRooms = new Set<string>();
   const dirtyCounts = new Set<string>();
+  // A room can close while a commit is in flight. Keep its result until that commit succeeds.
+  const pendingResults = new Map<string, MatchResult>();
   const engine = new GameEngine({ now: options.now, deferQuestionStart: Boolean(options.persistence),
     onChange: code => { generation++; dirtyRooms.add(code); },
-    onAnswer: code => { generation++; dirtyCounts.add(code); } });
+    onAnswer: code => { generation++; dirtyCounts.add(code); },
+    onComplete: result => { if (options.persistence?.history) pendingResults.set(result.id, result); } });
   // All LAN clients may share an address. Limit expensive failed operator authentication separately.
   const operatorFailures = new Map<string, { count: number; expires: number }>();
   const creations = new Map<string, { fingerprint: string; credentials: SessionCredentials }>();
@@ -84,6 +89,7 @@ export function createSocketServer(http: HttpServer, options: Options) {
         const codes = new Set(engine.roomCodes());
         for (const [id, entry] of creations) if (!codes.has(entry.credentials.code)) creations.delete(id);
         const data = serialize({ version: 1, rooms: engine.snapshot(), creations });
+        const results = [...pendingResults.values()];
         const storageStarted = performance.now();
         const snapshotMs = storageStarted - snapshotStarted;
         timings.snapshotMs += snapshotMs;
@@ -93,8 +99,9 @@ export function createSocketServer(http: HttpServer, options: Options) {
         const deadline = new Promise<never>((_, reject) => {
           timeout = setTimeout(() => reject(Error('Storage commit timed out')), 5000);
         });
-        writing = Promise.race([options.persistence.save(data), deadline]).then(() => {
+        writing = Promise.race([options.persistence.save(data, results), deadline]).then(() => {
           committed = version;
+          for (const result of results) if (pendingResults.get(result.id) === result) pendingResults.delete(result.id);
           const storageMs = performance.now() - storageStarted;
           timings.commits++; timings.storageMs += storageMs;
           timings.storageMaxMs = Math.max(timings.storageMaxMs, storageMs);
@@ -179,6 +186,22 @@ export function createSocketServer(http: HttpServer, options: Options) {
       authorizeOperator(socket, payload?.hostKey);
       if (!options.persistence?.library) throw Error('Penyimpanan kuis server tidak tersedia.');
       return options.persistence.library(parseLibraryRequest(payload));
+    }));
+    socket.on('history:request', (payload, ack) => handle(socket, ack, async () => {
+      authorizeOperator(socket, payload?.hostKey);
+      const request = parseHistoryRequest(payload);
+      if (!options.persistence?.history) throw Error('Riwayat pertandingan tidak tersedia.');
+      await flush();
+      return options.persistence.history(request);
+    }));
+    socket.on('match:result', (_payload, ack) => handle(socket, ack, async () => {
+      const session = credentials(socket);
+      if (session.role !== 'host') throw Error('Hasil pertandingan hanya tersedia untuk host.');
+      const view = engine.view(session);
+      if (!view.completedMatchId) throw Error('Pertandingan belum selesai atau tidak memiliki arsip.');
+      if (!options.persistence?.history) throw Error('Riwayat pertandingan tidak tersedia.');
+      await flush();
+      return await options.persistence.history({ action: 'get', id: view.completedMatchId }) as MatchResult | null;
     }));
     socket.on('room:create', (payload, ack) => handle(socket, ack, () => {
       authorizeOperator(socket, payload?.hostKey);
@@ -281,7 +304,7 @@ export function createSocketServer(http: HttpServer, options: Options) {
     finally {
       await new Promise<void>(resolve => io.close(() => resolve()));
       await options.persistence?.close();
-      engine.close(); operatorFailures.clear(); creations.clear();
+      engine.close(); operatorFailures.clear(); creations.clear(); pendingResults.clear();
     }
   })() };
 }

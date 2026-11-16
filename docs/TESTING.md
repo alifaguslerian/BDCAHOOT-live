@@ -31,17 +31,26 @@ python scripts/check-player-layout.py reports/player-layout.json
 python scripts/check-network-recovery.py
 python scripts/check-quiz-library.py
 python scripts/check-podium-transition.py --faults
+python scripts/check-match-history.py
 ```
 
 Run these individually. Each script starts and stops its own production server
 with a temporary SQLite database. Ports are 3137 for layout, 3133 for network
-recovery, 3127 for the library, and 3138 for the podium. Results go in `reports/`,
+recovery, 3127 for the library, 3138 for the podium, and 3142 for match history. Results go in `reports/`,
 which Git ignores.
 
 The podium check exercises a missing command, lost ACK, rapid clicks, offline host,
 player reconnect, refresh, and the 3 → 2 → 1 reveal. Network fault injection operates
 on protocol messages and browser connectivity; it does not reproduce radio loss.
 Phone-sized viewports do not reproduce the CPU or operating system of a real phone.
+
+The history check seeds 21 completed demo matches through the actual engine and
+SQLite worker, then checks pagination, all ranking rows, matching CSV downloads
+from podium/history, offline download retry, refresh, mobile layout, room closure,
+quiz deletion, and restart with a fresh browser. Its fixture never uses event data.
+The history unit/integration tests cover live Socket.io archival, same-quiz replay,
+operator authorization, closure races, recovery, schema migration, and atomic rollback
+when either result insertion or snapshot writing fails.
 
 ## Endurance with real timers
 

@@ -2,6 +2,7 @@ import { Quiz, QuizQuestion } from '@/types/quiz';
 import { io, type Socket } from 'socket.io-client';
 import type { ClientEvents, ServerEvents, Reply } from '@/types/network';
 import type { LibraryRequest, LibraryResult } from '@/types/quizLibrary';
+import type { HistoryRequest, HistoryResponse, MatchCursor, MatchPage, MatchResult } from '@/types/matchHistory';
 
 const STORAGE_KEY = 'bdcahoot_quiz_library_v1';
 const OPERATOR_KEY = 'bdcahoot_library_operator';
@@ -34,6 +35,22 @@ function waitForConnection(connection: Socket<ServerEvents, ClientEvents>): Prom
     connection.once('connect', connected);
     connection.connect();
   });
+}
+async function historyRequest(payload: HistoryRequest): Promise<HistoryResponse> {
+  if (!socket) throw Error('Buka koleksi operator terlebih dahulu.');
+  const connection = socket;
+  if (!connection.connected) await waitForConnection(connection);
+  let reply: Reply<HistoryResponse>;
+  try { reply = await connection.timeout(7000).emitWithAck('history:request', { ...payload, hostKey: operatorKey }); }
+  catch { throw Error('Riwayat belum dapat dimuat. Periksa koneksi lalu coba lagi.'); }
+  if (!reply.success) throw Error(reply.error);
+  return reply.data;
+}
+export async function loadMatchHistory(before?: MatchCursor): Promise<MatchPage> {
+  return await historyRequest({ action: 'list', limit: 20, before }) as MatchPage;
+}
+export async function loadMatchResult(id: string): Promise<MatchResult | null> {
+  return await historyRequest({ action: 'get', id }) as MatchResult | null;
 }
 export async function connectQuizLibrary(key: string): Promise<void> {
   disconnectQuizLibrary();

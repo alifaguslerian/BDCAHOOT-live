@@ -14,6 +14,7 @@ import {
   Layers,
   ArrowLeft,
   Search,
+  History,
 } from 'lucide-react';
 import { Quiz } from '@/types/quiz';
 import { getStoredQuizzes, deleteQuiz, createNewDraftQuiz, saveQuiz, refreshQuizzes as loadLibrary } from '@/lib/quizStore';
@@ -109,6 +110,9 @@ export default function HostLibraryPage() {
 
       {/* Main Container */}
       <main className="flex-1 w-full max-w-6xl mx-auto px-6 lg:px-12 py-8 flex flex-col">
+        <Link href="/host/history" className="mb-5 inline-flex min-h-12 items-center gap-2 self-start rounded-lg border border-[#524534] px-4 py-3 text-sm font-bold text-[#ffc880] hover:bg-[#151a22]">
+          <History className="h-4 w-4" aria-hidden="true" /> Riwayat Pertandingan
+        </Link>
         {hasRoom && role === 'host' && <Link href={`/host/room/${room.code}`} className="mb-4 rounded border border-[#ffc880] p-4 text-[#ffc880]">Lanjutkan room aktif: {room.code}</Link>}
         <details className="mb-6 rounded border border-[#272a31] p-4">
           <summary className="cursor-pointer min-h-12 flex items-center">Pulihkan room yang masih aktif</summary>

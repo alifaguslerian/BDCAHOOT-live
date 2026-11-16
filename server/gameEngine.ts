@@ -3,6 +3,8 @@ import { performance } from 'node:perf_hooks';
 import { calculateQuestionPoints, calculateRankings } from '../lib/scoring';
 import { fitsQuizPayload } from '../lib/quizLimits';
 import { DEFAULT_AVATAR_ID, isAvatarId } from '../lib/avatars';
+import { createMatchResult } from './matchHistory';
+import type { MatchResult } from '../types/matchHistory';
 import type { GameRoomSettings, GameStage, Player, ScoreboardRankItem } from '../types/game';
 import type { QuizQuestion, OptionId } from '../types/quiz';
 import type { AnswerReceipt, HostCommand, RoomView, SessionCredentials, SubmitRequest } from '../types/network';
@@ -19,6 +21,7 @@ type Room = {
   joins: Map<string, { name: string; credentials: SessionCredentials }>;
   receipts: Map<string, AnswerReceipt>; sequence: number; touched: number;
   rankings: ScoreboardRankItem[];
+  historyVersion?: 1; quizId?: string | null; startedAt?: number; completedAt?: number;
 };
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Data tidak valid.');
@@ -32,7 +35,7 @@ function identifier(value: unknown): string {
   if (typeof value !== 'string' || !/^[a-zA-Z0-9_-]{16,100}$/.test(value)) throw new Error('ID permintaan tidak valid.');
   return value;
 }
-function parseQuiz(value: unknown): {title: string; questions: QuizQuestion[]} {
+function parseQuiz(value: unknown): {id: string | null; title: string; questions: QuizQuestion[]} {
   const q=object(value);
   const title=string(q.title,200);
   if (!Array.isArray(q.questions) || q.questions.length<1 || q.questions.length>200) throw new Error('Kuis harus memiliki 1 sampai 200 soal.');
@@ -49,7 +52,7 @@ function parseQuiz(value: unknown): {title: string; questions: QuizQuestion[]} {
     }) as QuizQuestion['options'];
     return {id, question:string(row.question,4000), options, correctOption:row.correctOption as OptionId, timerSeconds:row.timerSeconds as number};
   });
-  return {title,questions};
+  return {id: q.id === undefined ? null : string(q.id,100),title,questions};
 }
 
 export class GameEngine {
@@ -59,13 +62,15 @@ export class GameEngine {
   private onAnswer?: (code: string) => void;
   private maxPlayers: number;
   private deferQuestionStart: boolean;
+  private onComplete?: (result: MatchResult) => void;
 
-  constructor(options: {now?: () => number; onChange?: (code: string) => void; onAnswer?: (code: string) => void; maxPlayers?: number; deferQuestionStart?: boolean} = {}) {
+  constructor(options: {now?: () => number; onChange?: (code: string) => void; onAnswer?: (code: string) => void; onComplete?: (result: MatchResult) => void; maxPlayers?: number; deferQuestionStart?: boolean} = {}) {
     const epoch=Date.now(), anchor=performance.now();
     this.now=options.now ?? (() => epoch+performance.now()-anchor);
     this.onChange=options.onChange; this.onAnswer=options.onAnswer;
     this.maxPlayers=options.maxPlayers ?? 150;
     this.deferQuestionStart = options.deferQuestionStart ?? false;
+    this.onComplete = options.onComplete;
     if (!Number.isInteger(this.maxPlayers) || this.maxPlayers<1 || this.maxPlayers>150) throw new Error('Batas pemain harus 1 sampai 150.');
   }
 
@@ -88,7 +93,7 @@ export class GameEngine {
     if(raw.shuffleQuestions) {
       for(let i=parsed.questions.length-1;i>0;i--) { const j=randomInt(i+1); [parsed.questions[i],parsed.questions[j]]=[parsed.questions[j],parsed.questions[i]]; }
     }
-    const room: Room={code, sessionId:randomUUID(), title:parsed.title, questions:parsed.questions,
+    const room: Room={code, sessionId:randomUUID(), title:parsed.title, questions:parsed.questions, historyVersion:1, quizId:parsed.id,
       settings:{shuffleQuestions:raw.shuffleQuestions===true,revealDurationMs:duration as number}, revision:1,
       stage:'LOBBY', index:-1, start:null, end:null, revealEnd:null, players:{}, tokens:new Map(), joins:new Map(), receipts:new Map(), sequence:0, touched:this.now(), rankings:[]};
     this.rooms.set(code,room);
@@ -194,6 +199,7 @@ export class GameEngine {
     return {code:room.code,sessionId:room.sessionId,revision:room.revision,quizTitle:room.title,stage:room.stage,currentQuestionIndex:room.index,
       totalQuestions:room.questions.length,currentQuestion:question,settings:{...room.settings},countdownEndsAtMs:room.countdownEnd ?? null,questionStartedAtMs:room.start,questionEndsAtMs:room.end,revealEndsAtMs:room.revealEnd,
       players,rankings:room.rankings.map(r=>({...r})),distribution,answeredCount,
+      ...(identity.role === 'host' && room.completedAt !== undefined ? { completedMatchId: room.sessionId } : {}),
       ownReceipt: identity.playerId && room.receipts.has(identity.playerId+':'+room.index) ? {...room.receipts.get(identity.playerId+':'+room.index)!} : null};
   }
   submit(credentials: SessionCredentials, request: SubmitRequest): AnswerReceipt {
@@ -223,7 +229,12 @@ export class GameEngine {
     for(const player of Object.values(room.players)) if(!player.answers[room.index]) player.totalResponseTimeMs+=room.questions[room.index].timerSeconds*1000;
     const previous=Object.fromEntries(room.rankings.map(r=>[r.playerId,r.rank]));
     room.rankings=calculateRankings(room.players,previous);
-    room.stage='REVEAL'; room.revealEnd=at+room.settings.revealDurationMs; this.changed(room);
+    room.stage='REVEAL'; room.revealEnd=at+room.settings.revealDurationMs;
+    if (room.historyVersion === 1 && room.index === room.questions.length - 1 && room.startedAt !== undefined && room.completedAt === undefined) {
+      room.completedAt = this.now();
+      this.onComplete?.(createMatchResult(room));
+    }
+    this.changed(room);
   }
   private openQuestion(room: Room): void {
     room.countdownEnd=null; room.index++; room.stage='QUESTION'; room.start=this.deferQuestionStart ? null : this.now();
@@ -253,7 +264,7 @@ export class GameEngine {
         for(const [token,identity] of room.tokens) if(identity.playerId===request.playerId) room.tokens.delete(token);
         room.rankings=calculateRankings(room.players); this.changed(room); return;
       }
-      case 'start': if(room.stage==='LOBBY' && Object.keys(room.players).length > 0) {room.stage='COUNTDOWN'; room.countdownEnd=this.deferQuestionStart ? null : this.now()+5000; this.changed(room); return;} break;
+      case 'start': if(room.stage==='LOBBY' && Object.keys(room.players).length > 0) {room.startedAt=this.now(); room.stage='COUNTDOWN'; room.countdownEnd=this.deferQuestionStart ? null : this.now()+5000; this.changed(room); return;} break;
       case 'next': if(room.stage==='SCOREBOARD') {
         if(room.index+1<room.questions.length) this.openQuestion(room); else {room.stage='FINAL'; this.changed(room);} return;
       } break;
@@ -287,9 +298,15 @@ export class GameEngine {
         || !(room.tokens instanceof Map) || !(room.receipts instanceof Map) || !(room.joins instanceof Map)
         || !room.players || Object.keys(room.players).length > 150 || !Array.isArray(room.rankings)) throw Error('Snapshot room tidak valid.');
       parseQuiz({ title: room.title, questions: room.questions });
+      if (room.historyVersion !== undefined && (room.historyVersion !== 1
+        || (room.startedAt !== undefined && !Number.isFinite(room.startedAt))
+        || (room.completedAt !== undefined && (!Number.isFinite(room.completedAt) || room.startedAt === undefined
+          || room.completedAt < room.startedAt || room.index !== room.questions.length - 1
+          || !['REVEAL', 'SCOREBOARD', 'FINAL'].includes(room.stage))))) throw Error('Metadata riwayat tidak valid.');
       if (!Number.isInteger(room.index) || room.index < -1 || room.index >= room.questions.length
         || (!['LOBBY', 'COUNTDOWN', 'FINAL'].includes(room.stage) && room.index < 0)) throw Error('Posisi soal snapshot tidak valid.');
       if (this.now() - room.touched > TTL) { rooms.delete(code); continue; }
+      if (room.historyVersion === 1 && room.completedAt !== undefined) this.onComplete?.(createMatchResult(room));
       if (room.stage === 'COUNTDOWN') {
         if (room.index !== -1) throw Error('Posisi countdown snapshot tidak valid.');
         room.countdownEnd = this.deferQuestionStart ? null : this.now() + 5000;

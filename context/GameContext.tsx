@@ -7,6 +7,7 @@ import type { ClientEvents, ServerEvents, RoomView, SessionCredentials, SubmitRe
 import type { Quiz, OptionId } from '@/types/quiz';
 import type { GameRoomSettings, GameStage } from '@/types/game';
 import { fitsQuizPayload } from '@/lib/quizLimits';
+import type { MatchResult } from '@/types/matchHistory';
 
 const EMPTY_ROOM: RoomView = { code: '', sessionId: '', revision: -1, quizTitle: '', stage: 'LOBBY', currentQuestionIndex: 0, totalQuestions: 0, currentQuestion: null, settings: { shuffleQuestions: false, revealDurationMs: 4000 }, questionStartedAtMs: null, questionEndsAtMs: null, revealEndsAtMs: null, players: {}, rankings: [], distribution: { A: 0, B: 0, C: 0, D: 0 }, answeredCount: 0 };
 const SESSION_KEY = 'bdcahoot_session';
@@ -244,9 +245,16 @@ function useGameState() {
     if (saved.receipt) return { success: true as const, data: saved.receipt };
     return transmit(saved);
   }
+  async function loadCurrentMatchResult(): Promise<MatchResult | null> {
+    const socket = socketRef.current;
+    if (!socket?.connected || !authenticated.current || credentials.current?.role !== 'host') throw Error('Host belum terhubung. Tunggu koneksi pulih lalu coba lagi.');
+    const reply = await request<MatchResult | null>(ack => socket.timeout(7000).emit('match:result', {}, ack));
+    if (!reply.success) throw Error(reply.error);
+    return reply.data;
+  }
   const activeSubmission = submission?.request.sessionId === room.sessionId && submission.request.questionIndex === room.currentQuestionIndex ? submission : null;
   return { room, hasRoom: Boolean(room.sessionId), currentPlayerId, role, ready, connection, error, serverOffsetMs, isHostActionLoading,
-    createRoomFromQuiz, recoverHostRoom, inspectRoom, joinRoomAsPlayer, submitAnswer, leaveRoom, isLeaving,
+    createRoomFromQuiz, recoverHostRoom, inspectRoom, joinRoomAsPlayer, submitAnswer, leaveRoom, isLeaving, loadCurrentMatchResult,
     pendingOption: activeSubmission?.request.option ?? null,
     answerConfirmed: Boolean(activeSubmission?.receipt),
     hasPlayerAnswered: (id: string) => Boolean(room.players[id]?.answers[room.currentQuestionIndex] || (id === currentPlayerId && activeSubmission?.receipt)),
